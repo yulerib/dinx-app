@@ -1,0 +1,403 @@
+.reserva-container {
+  max-width: 100%;
+}
+
+.reserva-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast, 0.2s);
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+}
+
+.summary-card.total-reserva {
+  border-left: 4px solid #10b981;
+}
+
+.summary-card.saldo-devedor {
+  border-left: 4px solid #ef4444;
+}
+
+.card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--bg-main);
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.card-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-top: 0.25rem;
+  color: var(--text-main);
+}
+
+.card-value.value-positive {
+  color: #10b981;
+}
+
+.card-value.value-negative {
+  color: #ef4444;
+}
+
+.card-value.value-zero {
+  color: var(--text-muted);
+}
+
+.reserva-layout-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1.2fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 992px) {
+  .reserva-layout-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.reserva-extrato-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.reserva-item {
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  transition: all var(--transition-fast, 0.2s);
+}
+
+.reserva-item:hover {
+  background-color: rgba(99, 102, 241, 0.02);
+}
+
+.reserva-item.programado {
+  border-style: dashed;
+  background-color: rgba(248, 250, 252, 0.5);
+}
+
+.reserva-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.reserva-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reserva-item-day {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+}
+
+.badge-tipo {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.badge-tipo.entrada {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.badge-tipo.saida {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.badge-geral {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background-color: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
+.badge-devedor-gerar {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background-color: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.badge-devedor-quitar {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background-color: rgba(6, 182, 212, 0.1);
+  color: #06b6d4;
+}
+
+.reserva-item-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #64748b);
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-main, #0f172a);
+}
+
+.btn-icon.text-danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.reserva-item-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.reserva-item-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reserva-item-desc {
+  font-weight: 600;
+  color: var(--text-main, #0f172a);
+}
+
+.reserva-item-value-section {
+  display: flex;
+  align-items: center;
+}
+
+.reserva-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.reserva-value.text-positive {
+  color: #10b981;
+}
+
+.reserva-value.text-negative {
+  color: var(--text-main, #0f172a);
+}
+
+.realized-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.btn-realize-trigger {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  background-color: #10b981;
+  border: 1px solid #059669;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-realize-trigger:hover {
+  background-color: #059669;
+}
+
+.realize-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn-confirm {
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-cancel-inline {
+  font-size: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+}
+
+.badge-success-zero {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background-color: #d1fae5;
+  color: #065f46;
+  padding: 0.15rem 0.5rem;
+  border-radius: 50px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.reposicao-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.reposicao-card {
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+}
+
+.reposicao-desc {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main, #0f172a);
+}
+
+.reposicao-value {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #ef4444;
+}
+
+/* Modal Form Styles */
+.reserva-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-top: 0.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group input[type="number"],
+.form-group input[type="month"],
+.form-group select {
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  border: 2px solid var(--border-color);
+  font-size: 0.95rem;
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--primary);
+}
+
+.form-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main, #0f172a);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}

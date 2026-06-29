@@ -1,0 +1,28 @@
+# Ignorar pastas de bibliotecas (muito pesadas)
+node_modules/
+frontend/node_modules/
+
+# Ignorar arquivos de senhas e segredos locais
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Ignorar pastas de build e compilação
+dist/
+frontend/dist/
+.temp/
+supabase/.temp/
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Configurações locais do editor e da inteligência artificial
+.gemini/
+.vscode/
+.idea/
+
+.vercel

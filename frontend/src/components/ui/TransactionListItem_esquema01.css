@@ -1,0 +1,285 @@
+.transaction-list-item {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 60px;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+  transition: background-color 0.2s;
+  border-radius: var(--radius-md);
+  gap: 0.5rem;
+}
+
+.transaction-list-item:hover {
+  background-color: var(--bg-main);
+}
+
+.tli-header-row {
+  display: contents; /* No desktop, age como se não existisse e os filhos participam do grid diretamente */
+}
+
+.tli-title {
+  grid-column: 1;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tli-category-actions-mobile,
+.tli-actions-top,
+.tli-installment-total-box,
+.tli-installment-bottom-row,
+.tli-daily-bottom-row,
+.tli-mobile-title-only {
+  display: none !important;
+}
+
+.tli-category-actions-desktop {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tli-values {
+  display: contents; /* No desktop, eles participam do grid pai diretamente */
+}
+
+.tli-value1 {
+  grid-column: 2;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+.tli-value2,
+.tli-value2-desktop-only {
+  grid-column: 3;
+  text-align: right;
+}
+
+.tli-actions,
+.tli-actions-desktop-only {
+  grid-column: 4;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+/* Modo Edição Desktop */
+.transaction-list-item.is-editing .tli-value2 {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Responsividade Mobile-First (Cards) */
+@media (max-width: 768px) {
+  .transaction-list-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem 1rem !important;
+    background-color: rgba(14, 25, 20, 0.4); /* Fundo de card sutil */
+    margin-bottom: 0.75rem !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-md) !important;
+  }
+  
+  .transaction-list-item:hover {
+    background-color: rgba(14, 25, 20, 0.6);
+  }
+
+  .tli-header-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .tli-title {
+    font-size: 1.1rem !important;
+    font-weight: 600 !important;
+  }
+
+  .tli-desktop-title-container {
+    display: none !important;
+  }
+
+  .tli-mobile-title-only {
+    display: inline !important;
+  }
+
+  .tli-category-actions-desktop {
+    display: none !important;
+  }
+
+  .tli-category-actions-mobile {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tli-category-actions-mobile button {
+    padding: 0.25rem;
+    color: var(--text-muted);
+  }
+
+  .tli-category-actions-mobile svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .tli-actions-top {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tli-actions-top button {
+    padding: 0.25rem;
+    color: var(--text-muted);
+  }
+
+  .tli-actions-top svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .tli-values {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    padding: 0.5rem 1rem !important; /* Mais fino */
+    border-radius: var(--radius-md) !important;
+  }
+
+  .tli-value1 {
+    text-align: left !important;
+    font-size: 0.875rem !important;
+  }
+
+  .tli-value1::before {
+    content: "Proj: ";
+    opacity: 0.7;
+    font-size: 0.8em;
+  }
+
+  .tli-value2 {
+    text-align: left !important;
+    font-size: 1.5rem !important; /* Maior e com mais destaque */
+    font-weight: 700 !important;
+    width: 100% !important;
+  }
+
+  /* Customizações de Layout para Gastos Fixos e Diários */
+  .tli-fixed .tli-values,
+  .tli-daily .tli-values {
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+
+  .tli-fixed .tli-value1,
+  .tli-daily .tli-value1 {
+    text-align: left !important;
+  }
+
+  .tli-fixed .tli-value2 {
+    text-align: left !important;
+    font-size: 1.5rem !important; /* Maior e mais destacado fora do box */
+    font-weight: 700 !important;
+    margin-top: 0.25rem !important;
+    padding-left: 0.25rem !important;
+    width: auto !important;
+  }
+
+  /* Modo Edição no Mobile */
+  .transaction-list-item.is-editing.tli-fixed .tli-values,
+  .transaction-list-item.is-editing.tli-daily .tli-values {
+    align-items: center !important;
+  }
+
+  .transaction-list-item.is-editing.tli-fixed .tli-value2 {
+    margin-top: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  /* Layout de Gastos Diários no Mobile (Alineação Lado a Lado do Valor Real/Status e Ícones de Ação) */
+  .tli-daily-bottom-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-top: 0.5rem !important; /* Espaçamento estético */
+  }
+
+  .tli-daily-value {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    text-align: left !important;
+  }
+
+  .tli-actions-bottom {
+    display: flex !important;
+    gap: 0.75rem !important;
+    align-items: center !important;
+  }
+
+  .tli-actions-bottom button {
+    padding: 0.5rem !important;
+  }
+
+  /* Customizações de Layout para Parcelas */
+  .tli-installment .tli-values {
+    display: none !important; /* Esconde a caixa de valores padrão */
+  }
+
+  .tli-installment-total-box {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: rgba(0, 0, 0, 0.2) !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: var(--radius-md) !important;
+    width: 100% !important;
+    font-size: 0.875rem !important;
+  }
+
+  .tli-itb-label {
+    color: var(--text-muted) !important;
+  }
+
+  .tli-itb-value {
+    font-weight: 500 !important;
+  }
+
+  .tli-installment-bottom-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-top: 0.25rem !important;
+    padding-top: 0.75rem !important;
+    border-top: 1px dashed rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .tli-installment-value {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    text-align: left !important;
+  }
+
+  .tli-installment-number {
+    font-size: 0.9rem !important;
+    color: var(--text-muted) !important;
+    font-weight: 500 !important;
+    text-align: right !important;
+  }
+
+  /* Esconde os itens apenas de desktop */
+  .tli-actions-desktop-only,
+  .tli-value2-desktop-only {
+    display: none !important;
+  }
+}

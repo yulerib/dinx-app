@@ -1,0 +1,121 @@
+.sidebar {
+  width: 260px;
+  background-color: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: transparent;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.025em;
+}
+
+.sidebar-nav {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: all var(--transition-normal);
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  transform: translateX(4px);
+}
+
+.nav-link:active {
+  transform: scale(0.96);
+}
+
+.nav-link.active {
+  background-color: var(--primary);
+  color: #141816 !important;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(127, 255, 0, 0.25);
+}
+
+/* Responsividade Básica (Mobile) */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+    padding-bottom: 90px; /* Espaço para a ilha não sobrepor o conteúdo */
+  }
+  
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    background: transparent;
+  }
+  
+  .sidebar-header {
+    background-color: rgba(5, 11, 8, 0.85); /* Glassmorphism no header */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  
+  .sidebar-nav {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+    background-color: rgba(14, 25, 20, 0.85); /* Glassmorphism forte */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 30px; /* Bem redondo estilo pílula */
+    padding: 0.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px -3px rgba(16, 185, 129, 0.1);
+    z-index: 50;
+    justify-content: center;
+    gap: 0.5rem;
+    width: max-content;
+    max-width: 95%;
+  }
+  
+  .nav-link {
+    padding: 0.75rem;
+    border-radius: 50%; /* Ícones circulares no mobile */
+    transition: all var(--transition-normal);
+  }
+  
+  .nav-link:hover {
+    transform: translateY(-2px);
+  }
+  
+  .nav-link span {
+    display: none; /* Esconde o texto no mobile */
+  }
+  
+  .nav-link.active {
+    background-color: var(--primary);
+    color: var(--bg-main);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-4px); /* Pula levemente ao estar ativo */
+  }
+}
