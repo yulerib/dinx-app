@@ -1,0 +1,89 @@
+.observacoes-page {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.observacoes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Conteúdo do Card */
+.obs-card-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.obs-text {
+  color: var(--color-text-main);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap; /* Preserva quebras de linha */
+  word-break: break-word;
+}
+
+.obs-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* Botões de Ação no Card */
+.icon-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.icon-action-btn:hover {
+  background-color: var(--color-bg-body);
+}
+
+.icon-action-btn.edit:hover {
+  color: var(--color-primary);
+}
+
+.icon-action-btn.delete:hover {
+  color: #ef4444; /* Vermelho suave para remoção */
+}
+
+/* Animação simples de fade */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsividade adicional */
+@media (max-width: 480px) {
+  .observacoes-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .page-header-container {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 1rem;
+  }
+}

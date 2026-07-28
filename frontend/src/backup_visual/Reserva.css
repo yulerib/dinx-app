@@ -401,27 +401,3 @@
   width: 16px;
   height: 16px;
 }
-
-/* Estilos de Abas e Alerta de Quitação */
-.reserva-tab-btn:hover {
-  background-color: rgba(99, 102, 241, 0.08) !important;
-}
-
-.reserva-tab-btn.active {
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
-}
-
-.alert-banner-reserva {
-  animation: slideDownReserva 0.3s ease-out;
-}
-
-@keyframes slideDownReserva {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}

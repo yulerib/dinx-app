@@ -1,4 +1,4 @@
-# BLAISE APP - Keep-Alive Supabase
+# DINX APP - Keep-Alive Supabase
 # Ping diario ao Supabase para evitar pausa no plano gratuito.
 
 $SUPABASE_URL = "https://sxhhnptncflpueeksdbd.supabase.co"

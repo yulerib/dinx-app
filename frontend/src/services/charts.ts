@@ -21,6 +21,11 @@ export interface DailyForecastPoint {
   diaFormatado: string;
   saldo: number;
   atrasada: boolean;
+  entradas?: number;
+  fixos?: number;
+  diarios?: number;
+  reserva?: number;
+  cartao?: number;
 }
 
 export interface MonthlyPerformancePoint {
@@ -28,6 +33,26 @@ export interface MonthlyPerformancePoint {
   mesAnoFormatado: string;
   receitas: number;
   despesas: number;
+}
+
+export interface DailyCalendarItem {
+  descricao: string;
+  valor: number;
+  isExecutado: boolean; // true if valor_real was explicitly set (even if 0)
+}
+
+export interface DailyCalendarPoint {
+  dia: number;
+  diaFormatado: string;
+  entradas: DailyCalendarItem[];
+  saidasFixas: DailyCalendarItem[];
+  saidasDiarias: DailyCalendarItem[];
+  totalEntradas: number;
+  totalSaidasFixas: number;
+  totalSaidasDiarias: number;
+  saldoConta: number;
+  saldoReserva: number;
+  isToday: boolean;
 }
 
 // Helpers para conversão de datas
@@ -67,9 +92,29 @@ function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas:
   return null;
 }
 
+const getSalarioForMonth = (dbSalarios: any[], mesAno: string) => {
+  const exact = dbSalarios.find(s => s.mes_ano === mesAno);
+  if (exact) return exact;
+
+  const inherited = [...dbSalarios]
+    .filter(s => s.mes_ano <= mesAno)
+    .sort((a, b) => b.mes_ano.localeCompare(a.mes_ano))[0];
+
+  if (inherited) {
+    return {
+      ...inherited,
+      mes_ano: mesAno,
+      valor_real: null,
+      data_real: null,
+      id: ''
+    };
+  }
+  return null;
+};
+
 function getMesAnoAnterior(mesAno: string): string {
   const [year, month] = mesAno.split('-').map(Number);
-  const date = new Date(year, month - 2, 1); // month-2 handles the 1-indexed month correctly
+  const date = new Date(year, month - 2, 1);
   const newY = date.getFullYear();
   const newM = String(date.getMonth() + 1).padStart(2, '0');
   return `${newY}-${newM}`;
@@ -212,7 +257,8 @@ export const chartsService = {
       { data: dbComprasParceladas },
       { data: dbPagamentosFaturas },
       { data: dbMovsReserva },
-      { data: dbRegsReserva }
+      { data: dbRegsReserva },
+      { data: dbSalarios }
     ] = await Promise.all([
       supabase.from('entradas').select('*'),
       supabase.from('registros_entradas').select('*'),
@@ -223,7 +269,8 @@ export const chartsService = {
       supabase.from('compras_parceladas').select('*'),
       supabase.from('pagamentos_faturas').select('*'),
       supabase.from('movimentacoes_reserva').select('*'),
-      supabase.from('registros_movimentacoes_reserva').select('*')
+      supabase.from('registros_movimentacoes_reserva').select('*'),
+      supabase.from('salario').select('*')
     ]);
 
     // 2. Establish past range
@@ -258,37 +305,69 @@ export const chartsService = {
       tempDate.setMonth(tempDate.getMonth() + 1);
     }
 
+    // Build virtualSalarios for past, current and next months
+    const minMonth = pastMonths.length > 0 ? pastMonths[0] : currentMonthIso;
+    const maxReferenceMonth = addMonths(currentMonthIso, 2);
+
+    const virtualSalarios: any[] = [];
+    let tempM = minMonth;
+    while (tempM <= maxReferenceMonth) {
+      const sal = getSalarioForMonth(dbSalarios || [], tempM);
+      if (sal) {
+        virtualSalarios.push(sal);
+      }
+      tempM = addMonths(tempM, 1);
+    }
+
     // 3. Compute retroactive balance up to M-1
     let saldoAcumulado = 0;
 
     for (const m of pastMonths) {
-      // Receitas
+      // Receitas — entradas normais
       let inflowsM = 0;
+      
+      // Entradas pontuais neste mês
       const pontuaisEmM = (dbEntradas || []).filter(e => !e.projetar && e.data_entrada.substring(0, 7) === m);
       pontuaisEmM.forEach(e => {
         inflowsM += Number(e.valor_previsto_base);
       });
 
+      // Entradas recorrentes vigentes neste mês
       const recorrentesEmM = (dbEntradas || []).filter(e => {
         if (!e.projetar) return false;
-        const d = e.desvio_competencia || 0;
-        const C = addMonths(m, d);
-        const competenciaInicio = addMonths(e.data_entrada.substring(0, 7), d);
-        const startsOnOrBefore = competenciaInicio <= C;
-        const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= C;
-        return startsOnOrBefore && endsOnOrAfter;
+        const startMonth = e.data_entrada.substring(0, 7);
+        return startMonth <= m && (!e.mes_ano_fim || e.mes_ano_fim >= m);
       });
 
       recorrentesEmM.forEach(e => {
-        const d = e.desvio_competencia || 0;
-        const C = addMonths(m, d);
-        const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === C);
-        if (reg) {
+        const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === m);
+        if (reg && Number(reg.valor_real) > 0) {
           inflowsM += Number(reg.valor_real);
         } else if (e.ativo) {
           inflowsM += Number(e.valor_previsto_base);
         }
       });
+
+      // Salário cujo recebimento físico ocorreu no mês m
+      let salarioMTotal = 0;
+      virtualSalarios.forEach(s => {
+        let physicalMonth = '';
+        if (s.data_real) {
+          physicalMonth = s.data_real.substring(0, 7);
+        } else {
+          const desvio = s.desvio_mes_deposito ?? 0;
+          physicalMonth = addMonths(s.mes_ano, desvio);
+        }
+
+        if (physicalMonth === m) {
+          if (s.valor_real !== null && s.valor_real !== undefined) {
+            salarioMTotal += Number(s.valor_real);
+          } else if (s.valor_previsto > 0) {
+            salarioMTotal += Number(s.valor_previsto);
+          }
+        }
+      });
+      inflowsM += salarioMTotal;
 
       // Despesas Fixas
       let fixedM = 0;
@@ -375,16 +454,13 @@ export const chartsService = {
     const dailyPoints: DailyForecastPoint[] = [];
     let currentBalance = saldo_acumulado_inicial;
 
+    // Entradas normais do mês atual
     const pontuaisNoMes = (dbEntradas || []).filter(e => !e.projetar && e.data_entrada.substring(0, 7) === currentMonthIso);
     
     const recorrentesNoMes = (dbEntradas || []).filter(e => {
       if (!e.projetar) return false;
-      const d = e.desvio_competencia || 0;
-      const C = addMonths(currentMonthIso, d);
-      const competenciaInicio = addMonths(e.data_entrada.substring(0, 7), d);
-      const startsOnOrBefore = competenciaInicio <= C;
-      const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= C;
-      return startsOnOrBefore && endsOnOrAfter;
+      const startMonth = e.data_entrada.substring(0, 7);
+      return startMonth <= currentMonthIso && (!e.mes_ano_fim || e.mes_ano_fim >= currentMonthIso);
     });
 
     const activeFixos = (dbGastosFixos || []).filter(f => {
@@ -394,8 +470,10 @@ export const chartsService = {
 
     const totalLimiteMensalCategorias = (dbCategoriasDiarias || []).reduce((sum, c) => sum + Number(c.limite_mensal), 0);
 
+
+
     for (let d = 1; d <= 31; d++) {
-      // a) Inflows
+      // a) Inflows — entradas normais
       let inflowsDay = 0;
       
       pontuaisNoMes.forEach(e => {
@@ -408,16 +486,38 @@ export const chartsService = {
       recorrentesNoMes.forEach(e => {
         const entryDay = Number(e.data_entrada.split('-')[2]);
         if (entryDay === d) {
-          const dev = e.desvio_competencia || 0;
-          const C = addMonths(currentMonthIso, dev);
-          const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === C);
-          if (reg) {
+          const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
+          if (reg && Number(reg.valor_real) > 0) {
             inflowsDay += Number(reg.valor_real);
           } else if (e.ativo) {
             inflowsDay += Number(e.valor_previsto_base);
           }
         }
       });
+
+      // Salário no dia correto do gráfico
+      let salarioDay = 0;
+      virtualSalarios.forEach(s => {
+        let physicalMonth = '';
+        let physicalDay = 0;
+        let value = 0;
+
+        if (s.data_real) {
+          physicalMonth = s.data_real.substring(0, 7);
+          physicalDay = Number(s.data_real.split('-')[2]);
+          value = Number(s.valor_real);
+        } else {
+          const desvio = s.desvio_mes_deposito ?? 0;
+          physicalMonth = addMonths(s.mes_ano, desvio);
+          physicalDay = s.dia_previsto || 5;
+          value = Number(s.valor_previsto);
+        }
+
+        if (physicalMonth === currentMonthIso && physicalDay === d) {
+          salarioDay += value;
+        }
+      });
+      inflowsDay += salarioDay;
 
       // b) Fixed Expenses
       let fixedDay = 0;
@@ -459,23 +559,25 @@ export const chartsService = {
       let ccDebitDay = 0;
       let isAtrasada = false;
 
-      if (ccPaid && ccDiaPagamentoReal !== null) {
-        if (ccDiaPagamentoReal === d) {
-          ccDebitDay = faturaAnterior;
+      const ccValue = (pagoFaturaAnterior && Number(pagoFaturaAnterior.valor_pago) > 0) 
+        ? Number(pagoFaturaAnterior.valor_pago) 
+        : faturaAnterior;
+
+      if (ccPaid) {
+        const ccDia = ccDiaPagamentoReal || 10;
+        if (d === ccDia) {
+          ccDebitDay = ccValue;
         }
       } else if (faturaAnterior > 0) {
-        if (!isTodayPast10) {
-          if (d === 10) {
-            ccDebitDay = faturaAnterior;
-          }
-        } else {
-          if (d >= 10) {
-            isAtrasada = true;
-          }
+        if (d === 10) {
+          ccDebitDay = ccValue;
+        }
+        if (isTodayPast10 && d >= 10) {
+          isAtrasada = true;
         }
       }
 
-      // e) Reserva (depósitos como saídas, resgates como entradas na conta geral)
+      // e) Reserva
       let reservaInflowsDay = 0;
       let reservaOutflowsDay = 0;
 
@@ -519,7 +621,12 @@ export const chartsService = {
         dia: d,
         diaFormatado: String(d).padStart(2, '0'),
         saldo: Number(currentBalance.toFixed(2)),
-        atrasada: isAtrasada
+        atrasada: isAtrasada,
+        entradas: inflowsDay,
+        fixos: fixedDay,
+        diarios: dailyDay,
+        reserva: reservaInflowsDay - reservaOutflowsDay,
+        cartao: ccDebitDay
       });
     }
 
@@ -539,7 +646,8 @@ export const chartsService = {
       { data: dbRegistrosDiarios },
       { data: dbComprasParceladas },
       { data: dbMovsReserva },
-      { data: dbRegsReserva }
+      { data: dbRegsReserva },
+      { data: dbSalarios }
     ] = await Promise.all([
       supabase.from('entradas').select('*'),
       supabase.from('registros_entradas').select('*'),
@@ -548,7 +656,8 @@ export const chartsService = {
       supabase.from('registros_diarios').select('*'),
       supabase.from('compras_parceladas').select('*'),
       supabase.from('movimentacoes_reserva').select('*'),
-      supabase.from('registros_movimentacoes_reserva').select('*')
+      supabase.from('registros_movimentacoes_reserva').select('*'),
+      supabase.from('salario').select('*')
     ]);
 
     // Build performance range (last 6 months up to current month)
@@ -564,17 +673,16 @@ export const chartsService = {
     }
 
     return performanceMonths.map(m => {
-      // Receitas (Competência)
+      // Receitas — contabilizadas no mês de referência
       let inflowsM = 0;
+
+      // Entradas normais vigentes no mês m
       const entradasVigentes = (dbEntradas || []).filter(e => {
         const mesAnoInicio = e.data_entrada.substring(0, 7);
         if (!e.projetar) {
           return mesAnoInicio === m;
         }
-        const competenciaInicio = addMonths(mesAnoInicio, e.desvio_competencia || 0);
-        const startsOnOrBefore = competenciaInicio <= m;
-        const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= m;
-        return startsOnOrBefore && endsOnOrAfter;
+        return mesAnoInicio <= m && (!e.mes_ano_fim || e.mes_ano_fim >= m);
       });
 
       entradasVigentes.forEach(e => {
@@ -589,6 +697,16 @@ export const chartsService = {
           }
         }
       });
+
+      // Salário: contabilizado sempre no mês de referência (mes_ano)
+      const salarioM = (dbSalarios || []).find(s => s.mes_ano === m);
+      if (salarioM) {
+        if (salarioM.valor_real !== null && salarioM.valor_real !== undefined) {
+          inflowsM += Number(salarioM.valor_real);
+        } else if (salarioM.valor_previsto > 0) {
+          inflowsM += Number(salarioM.valor_previsto);
+        }
+      }
 
       // Despesas Fixas
       let fixedM = 0;
@@ -647,5 +765,410 @@ export const chartsService = {
         despesas: Number(totalDespesas.toFixed(2))
       };
     });
+  },
+
+  // Aba 3: Daily Calendar
+  async getDailyCalendarData(currentMonthDate: Date): Promise<DailyCalendarPoint[]> {
+    const targetYear = currentMonthDate.getFullYear();
+    const targetMonth = currentMonthDate.getMonth();
+    const currentMonthIso = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+    const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+    const realToday = new Date();
+    const realTodayDay = realToday.getDate();
+    const realTodayMonthIso = `${realToday.getFullYear()}-${String(realToday.getMonth() + 1).padStart(2, '0')}`;
+
+    // 1. Fetch all data
+    const [
+      { data: dbEntradas },
+      { data: dbRegEntradas },
+      { data: dbGastosFixos },
+      { data: dbRegGastosFixos },
+      { data: dbCategoriasDiarias },
+      { data: dbRegistrosDiarios },
+      { data: dbComprasParceladas },
+      { data: dbPagamentosFaturas },
+      { data: dbMovsReserva },
+      { data: dbRegsReserva },
+      { data: dbSalarios }
+    ] = await Promise.all([
+      supabase.from('entradas').select('*'),
+      supabase.from('registros_entradas').select('*'),
+      supabase.from('gastos_fixos').select('*'),
+      supabase.from('registros_gastos_fixos').select('*'),
+      supabase.from('categorias_diarias').select('*'),
+      supabase.from('registros_diarios').select('*'),
+      supabase.from('compras_parceladas').select('*'),
+      supabase.from('pagamentos_faturas').select('*'),
+      supabase.from('movimentacoes_reserva').select('*'),
+      supabase.from('registros_movimentacoes_reserva').select('*'),
+      supabase.from('salario').select('*')
+    ]);
+
+    // 2. Build past months range
+    let startYear = targetYear - 1;
+    let startMonth = 0;
+    const allDates: string[] = [];
+    if (dbEntradas) dbEntradas.forEach(e => allDates.push(e.data_entrada.substring(0, 7)));
+    if (dbRegEntradas) dbRegEntradas.forEach(r => allDates.push(r.mes_ano));
+    if (dbRegGastosFixos) dbRegGastosFixos.forEach(r => allDates.push(r.mes_ano));
+    if (dbRegistrosDiarios) dbRegistrosDiarios.forEach(r => allDates.push(r.data.substring(0, 7)));
+    if (dbComprasParceladas) dbComprasParceladas.forEach(p => allDates.push(p.mes_ano_inicio));
+    if (dbPagamentosFaturas) dbPagamentosFaturas.forEach(f => allDates.push(f.mes_ano));
+
+    if (allDates.length > 0) {
+      allDates.sort();
+      const [minY, minM] = allDates[0].split('-').map(Number);
+      if (minY < targetYear || (minY === targetYear && (minM - 1) < targetMonth)) {
+        startYear = minY;
+        startMonth = minM - 1;
+      }
+    }
+
+    const pastMonths: string[] = [];
+    let tempDate = new Date(startYear, startMonth, 1);
+    const limitDate = new Date(targetYear, targetMonth, 1);
+    while (tempDate < limitDate) {
+      const y = tempDate.getFullYear();
+      const mStr = String(tempDate.getMonth() + 1).padStart(2, '0');
+      pastMonths.push(`${y}-${mStr}`);
+      tempDate.setMonth(tempDate.getMonth() + 1);
+    }
+
+    // Build virtual salarios
+    const minMonth = pastMonths.length > 0 ? pastMonths[0] : currentMonthIso;
+    const maxReferenceMonth = addMonths(currentMonthIso, 2);
+    const virtualSalarios: any[] = [];
+    let tempM = minMonth;
+    while (tempM <= maxReferenceMonth) {
+      const sal = getSalarioForMonth(dbSalarios || [], tempM);
+      if (sal) virtualSalarios.push(sal);
+      tempM = addMonths(tempM, 1);
+    }
+
+    // 3. Compute retroactive balance and reserve balance up to M-1
+    let saldoAcumulado = 0;
+    let reserveBalance = 0;
+
+    for (const m of pastMonths) {
+      let inflowsM = 0;
+      const pontuaisEmM = (dbEntradas || []).filter(e => !e.projetar && e.data_entrada.substring(0, 7) === m);
+      pontuaisEmM.forEach(e => { inflowsM += Number(e.valor_previsto_base); });
+
+      const recorrentesEmM = (dbEntradas || []).filter(e => {
+        if (!e.projetar) return false;
+        const sm = e.data_entrada.substring(0, 7);
+        return sm <= m && (!e.mes_ano_fim || e.mes_ano_fim >= m);
+      });
+      recorrentesEmM.forEach(e => {
+        const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === m);
+        if (reg && Number(reg.valor_real) > 0) inflowsM += Number(reg.valor_real);
+        else if (e.ativo) inflowsM += Number(e.valor_previsto_base);
+      });
+
+      let salarioMTotal = 0;
+      virtualSalarios.forEach(s => {
+        let physicalMonth = '';
+        if (s.data_real) physicalMonth = s.data_real.substring(0, 7);
+        else { const desvio = s.desvio_mes_deposito ?? 0; physicalMonth = addMonths(s.mes_ano, desvio); }
+        if (physicalMonth === m) {
+          if (s.valor_real !== null && s.valor_real !== undefined) salarioMTotal += Number(s.valor_real);
+          else if (s.valor_previsto > 0) salarioMTotal += Number(s.valor_previsto);
+        }
+      });
+      inflowsM += salarioMTotal;
+
+      let fixedM = 0;
+      const fixosVigentes = (dbGastosFixos || []).filter(f => {
+        const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= m;
+        return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
+      });
+      fixosVigentes.forEach(f => {
+        const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
+        if (reg) fixedM += Number(reg.valor_real);
+        else if (f.ativo) fixedM += Number(f.valor_previsto_base);
+      });
+
+      const dailyM = (dbRegistrosDiarios || []).filter(r => r.data.substring(0, 7) === m).reduce((sum, r) => sum + Number(r.valor_gasto), 0);
+
+      const m1 = getMesAnoAnterior(m);
+      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+      const pagoFaturaM1 = (dbPagamentosFaturas || []).find(f => f.mes_ano === m1 && f.pago === true);
+      const ccM = pagoFaturaM1 ? faturaM1 : 0;
+
+      let reservaInflowsM = 0;
+      let reservaOutflowsM = 0;
+      (dbMovsReserva || []).filter(mov => !mov.projetar && mov.data_movimentacao.substring(0, 7) === m && mov.afeta_conta_geral).forEach(mov => {
+        if (mov.tipo === 'saida') reservaInflowsM += Number(mov.valor_previsto_base);
+        else reservaOutflowsM += Number(mov.valor_previsto_base);
+      });
+      (dbRegsReserva || []).filter(r => r.mes_ano === m && r.afeta_conta_geral).forEach(r => {
+        const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
+        if (parent) {
+          if (parent.tipo === 'saida') reservaInflowsM += Number(r.valor_real);
+          else reservaOutflowsM += Number(r.valor_real);
+        }
+      });
+
+      saldoAcumulado += (inflowsM + reservaInflowsM - fixedM - dailyM - ccM - reservaOutflowsM);
+
+      // Reserve balance for past months
+      (dbMovsReserva || []).filter(mov => !mov.projetar && mov.data_movimentacao.substring(0, 7) === m).forEach(mov => {
+        if (mov.tipo === 'entrada') reserveBalance += Number(mov.valor_previsto_base);
+        else reserveBalance -= Number(mov.valor_previsto_base);
+      });
+      (dbRegsReserva || []).filter(r => r.mes_ano === m).forEach(r => {
+        const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
+        if (parent) {
+          if (parent.tipo === 'entrada') reserveBalance += Number(r.valor_real);
+          else reserveBalance -= Number(r.valor_real);
+        }
+      });
+    }
+
+    // 4. Prepare current month data
+    const pontuaisNoMes = (dbEntradas || []).filter(e => !e.projetar && e.data_entrada.substring(0, 7) === currentMonthIso);
+    const recorrentesNoMes = (dbEntradas || []).filter(e => {
+      if (!e.projetar) return false;
+      const sm = e.data_entrada.substring(0, 7);
+      return sm <= currentMonthIso && (!e.mes_ano_fim || e.mes_ano_fim >= currentMonthIso);
+    });
+    const activeFixos = (dbGastosFixos || []).filter(f => {
+      const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= currentMonthIso;
+      return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso));
+    });
+    const totalLimiteMensalCategorias = (dbCategoriasDiarias || []).reduce((sum, c) => sum + Number(c.limite_mensal), 0);
+
+    // Category name map
+    const catNameMap = new Map<string, string>();
+    (dbCategoriasDiarias || []).forEach(c => catNameMap.set(c.id, c.nome));
+
+    // CC bill from previous month
+    const mesAnoAnterior = getMesAnoAnterior(currentMonthIso);
+    const mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const [prevY, prevMo] = mesAnoAnterior.split('-').map(Number);
+    const prevMonthLabel = `${mesesAbrev[prevMo - 1]}/${String(prevY).slice(-2)}`;
+    const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+    const pagoFaturaAnterior = (dbPagamentosFaturas || []).find(f => f.mes_ano === mesAnoAnterior);
+    const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
+    const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;
+    const ccValue = (pagoFaturaAnterior && Number(pagoFaturaAnterior.valor_pago) > 0) ? Number(pagoFaturaAnterior.valor_pago) : faturaAnterior;
+
+    // Reserve movements for current month
+    const activeMovsReserva = (dbMovsReserva || []).filter(mov => {
+      const sm = mov.data_movimentacao.substring(0, 7);
+      if (!mov.projetar) return sm === currentMonthIso && mov.afeta_conta_geral;
+      if (sm > currentMonthIso) return false;
+      if (mov.mes_ano_fim && currentMonthIso > mov.mes_ano_fim) return false;
+      return mov.afeta_conta_geral;
+    });
+
+    // All reserve movements for current month (for saldoReserva tracking, including non-afeta_conta_geral)
+    const allReserveMovsCurrentMonth = (dbMovsReserva || []).filter(mov => {
+      const sm = mov.data_movimentacao.substring(0, 7);
+      if (!mov.projetar) return sm === currentMonthIso;
+      if (sm > currentMonthIso) return false;
+      if (mov.mes_ano_fim && currentMonthIso > mov.mes_ano_fim) return false;
+      return true;
+    });
+
+    // 5. Day-by-day iteration
+    const dailyPoints: DailyCalendarPoint[] = [];
+    let currentBalance = saldoAcumulado;
+    let currentReserveBalance = reserveBalance;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayStr = `${currentMonthIso}-${String(d).padStart(2, '0')}`;
+      const isFutureDay = currentMonthIso > realTodayMonthIso || (currentMonthIso === realTodayMonthIso && d > realTodayDay);
+      const isToday = currentMonthIso === realTodayMonthIso && d === realTodayDay;
+
+      const entradas: DailyCalendarItem[] = [];
+      const saidasFixas: DailyCalendarItem[] = [];
+      const saidasDiarias: DailyCalendarItem[] = [];
+
+      // --- ENTRADAS ---
+      // Salary
+      virtualSalarios.forEach(s => {
+        let physicalMonth = '';
+        let physicalDay = 0;
+        let value = 0;
+        let isExec = false;
+        if (s.data_real) {
+          physicalMonth = s.data_real.substring(0, 7);
+          physicalDay = Number(s.data_real.split('-')[2]);
+          value = Number(s.valor_real);
+          isExec = true;
+        } else {
+          const desvio = s.desvio_mes_deposito ?? 0;
+          physicalMonth = addMonths(s.mes_ano, desvio);
+          physicalDay = s.dia_previsto || 5;
+          value = Number(s.valor_previsto);
+          isExec = false;
+        }
+        if (physicalMonth === currentMonthIso && physicalDay === d) {
+          const [refY, refM] = s.mes_ano.split('-').map(Number);
+          entradas.push({ descricao: `Salário ${mesesAbrev[refM - 1]}/${String(refY).slice(-2)}`, valor: value, isExecutado: isExec });
+        }
+      });
+
+      // Pontual entries
+      pontuaisNoMes.forEach(e => {
+        const entryDay = Number(e.data_entrada.split('-')[2]);
+        if (entryDay === d) {
+          entradas.push({ descricao: e.descricao, valor: Number(e.valor_previsto_base), isExecutado: true });
+        }
+      });
+
+      // Recurrent entries
+      recorrentesNoMes.forEach(e => {
+        const entryDay = Number(e.data_entrada.split('-')[2]);
+        if (entryDay === d) {
+          const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
+          const isExec = reg !== undefined && reg !== null;
+          const value = isExec ? Number(reg!.valor_real) : (e.ativo ? Number(e.valor_previsto_base) : 0);
+          if (value > 0 || isExec) {
+            entradas.push({ descricao: e.descricao, valor: value, isExecutado: isExec });
+          }
+        }
+      });
+
+      // Reserve withdrawals (saida = money from reserve TO account = inflow for account)
+      activeMovsReserva.forEach(mov => {
+        if (mov.tipo !== 'saida') return;
+        if (!mov.projetar) {
+          const entryDay = Number(mov.data_movimentacao.split('-')[2]);
+          if (entryDay === d) {
+            entradas.push({ descricao: `Resgate Reserva: ${mov.descricao}`, valor: Number(mov.valor_previsto_base), isExecutado: true });
+          }
+        } else {
+          const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === currentMonthIso);
+          if (reg) {
+            const paidDay = reg.dia_movimentacao_real || mov.dia_movimentacao_previsto;
+            if (paidDay === d) {
+              entradas.push({ descricao: `Resgate Reserva: ${mov.descricao}`, valor: Number(reg.valor_real), isExecutado: true });
+            }
+          } else if (mov.ativo && mov.dia_movimentacao_previsto === d) {
+            entradas.push({ descricao: `Resgate Reserva: ${mov.descricao}`, valor: Number(mov.valor_previsto_base), isExecutado: false });
+          }
+        }
+      });
+
+      // --- SAÍDAS FIXAS ---
+      // Fixed expenses
+      activeFixos.forEach(f => {
+        const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso);
+        const hasReal = reg && reg.valor_real !== null && reg.valor_real !== undefined;
+        if (hasReal) {
+          const paidDay = (reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0) ? reg!.dia_pagamento_real : f.dia_pagamento_previsto;
+          if (paidDay === d) {
+            saidasFixas.push({ descricao: f.nome, valor: Number(reg!.valor_real), isExecutado: true });
+          }
+        } else {
+          if (f.dia_pagamento_previsto === d) {
+            const previsto = reg && reg.valor_previsto_ajustado !== null ? reg.valor_previsto_ajustado : f.valor_previsto_base;
+            saidasFixas.push({ descricao: f.nome, valor: Number(previsto), isExecutado: false });
+          }
+        }
+      });
+
+      // Credit card bill
+      if (faturaAnterior > 0 || (ccPaid && ccValue > 0)) {
+        if (ccPaid) {
+          const ccDia = ccDiaPagamentoReal || 10;
+          if (d === ccDia) {
+            saidasFixas.push({ descricao: `Fatura Cartão (${prevMonthLabel})`, valor: ccValue, isExecutado: true });
+          }
+        } else if (faturaAnterior > 0 && d === 10) {
+          saidasFixas.push({ descricao: `Fatura Cartão (${prevMonthLabel})`, valor: ccValue, isExecutado: false });
+        }
+      }
+
+      // Reserve deposits — previsionado (projetar=true) = saída fixa
+      activeMovsReserva.forEach(mov => {
+        if (mov.tipo !== 'entrada') return;
+        if (!mov.projetar) return; // non-previsionado goes to saidasDiarias
+        const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === currentMonthIso);
+        if (reg) {
+          const paidDay = reg.dia_movimentacao_real || mov.dia_movimentacao_previsto;
+          if (paidDay === d) {
+            saidasFixas.push({ descricao: `Depósito Reserva: ${mov.descricao}`, valor: Number(reg.valor_real), isExecutado: true });
+          }
+        } else if (mov.ativo && mov.dia_movimentacao_previsto === d) {
+          saidasFixas.push({ descricao: `Depósito Reserva: ${mov.descricao}`, valor: Number(mov.valor_previsto_base), isExecutado: false });
+        }
+      });
+
+      // --- SAÍDAS DIÁRIAS ---
+      const recordsForDay = (dbRegistrosDiarios || []).filter(r => r.data === dayStr);
+      if (recordsForDay.length > 0) {
+        recordsForDay.forEach(r => {
+          const valor = Number(r.valor_gasto);
+          if (valor > 0) {
+            const catName = r.id_categoria ? (catNameMap.get(r.id_categoria) || 'Categoria') : 'Gasto Pontual';
+            const desc = r.descricao && r.descricao !== 'Zerado' ? `${r.descricao} (${catName})` : catName;
+            saidasDiarias.push({ descricao: desc, valor, isExecutado: true });
+          }
+        });
+      } else if (isFutureDay && totalLimiteMensalCategorias > 0) {
+        saidasDiarias.push({ descricao: 'Limite diário projetado', valor: Number((totalLimiteMensalCategorias / daysInMonth).toFixed(2)), isExecutado: false });
+      }
+      // Past days without records: leave saidasDiarias empty (zero)
+
+      // Reserve deposits — NOT previsionado (projetar=false) = saída diária
+      activeMovsReserva.forEach(mov => {
+        if (mov.tipo !== 'entrada') return;
+        if (mov.projetar) return; // previsionado already handled above
+        const entryDay = Number(mov.data_movimentacao.split('-')[2]);
+        if (entryDay === d) {
+          saidasDiarias.push({ descricao: `Depósito Reserva: ${mov.descricao}`, valor: Number(mov.valor_previsto_base), isExecutado: true });
+        }
+      });
+
+      // --- TOTALS ---
+      const totalEntradas = entradas.reduce((sum, i) => sum + i.valor, 0);
+      const totalSaidasFixas = saidasFixas.reduce((sum, i) => sum + i.valor, 0);
+      const totalSaidasDiarias = saidasDiarias.reduce((sum, i) => sum + i.valor, 0);
+
+      currentBalance = currentBalance + totalEntradas - totalSaidasFixas - totalSaidasDiarias;
+
+      // --- RESERVE BALANCE ---
+      allReserveMovsCurrentMonth.forEach(mov => {
+        if (!mov.projetar) {
+          const entryDay = Number(mov.data_movimentacao.split('-')[2]);
+          if (entryDay === d) {
+            if (mov.tipo === 'entrada') currentReserveBalance += Number(mov.valor_previsto_base);
+            else currentReserveBalance -= Number(mov.valor_previsto_base);
+          }
+        } else {
+          const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === currentMonthIso);
+          if (reg) {
+            const paidDay = reg.dia_movimentacao_real || mov.dia_movimentacao_previsto;
+            if (paidDay === d) {
+              if (mov.tipo === 'entrada') currentReserveBalance += Number(reg.valor_real);
+              else currentReserveBalance -= Number(reg.valor_real);
+            }
+          } else if (mov.ativo && mov.dia_movimentacao_previsto === d) {
+            if (mov.tipo === 'entrada') currentReserveBalance += Number(mov.valor_previsto_base);
+            else currentReserveBalance -= Number(mov.valor_previsto_base);
+          }
+        }
+      });
+
+      dailyPoints.push({
+        dia: d,
+        diaFormatado: String(d).padStart(2, '0'),
+        entradas,
+        saidasFixas,
+        saidasDiarias,
+        totalEntradas: Number(totalEntradas.toFixed(2)),
+        totalSaidasFixas: Number(totalSaidasFixas.toFixed(2)),
+        totalSaidasDiarias: Number(totalSaidasDiarias.toFixed(2)),
+        saldoConta: Number(currentBalance.toFixed(2)),
+        saldoReserva: Number(currentReserveBalance.toFixed(2)),
+        isToday
+      });
+    }
+
+    return dailyPoints;
   }
 };

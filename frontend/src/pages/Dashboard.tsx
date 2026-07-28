@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/ui/Card';
 import { BalanceProgressBar } from '../components/ui/BalanceProgressBar';
 import { AIPromptArea } from '../components/ui/AIPromptArea';
@@ -6,15 +6,15 @@ import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Link } from 'react-router-dom';
-import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown, Loader2, PiggyBank } from 'lucide-react';
+import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown, Loader2, PiggyBank, Eye } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { gastosFixosService } from '../services/gastosFixos';
 import { gastosDiariosService } from '../services/gastosDiarios';
 import { parcelasService } from '../services/parcelas';
 import { entradasService } from '../services/entradas';
 import { chartsService } from '../services/charts';
-import type { DailyForecastPoint, MonthlyPerformancePoint } from '../services/charts';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
+import type { DailyCalendarPoint, DailyCalendarItem, MonthlyPerformancePoint } from '../services/charts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
@@ -25,9 +25,57 @@ export function Dashboard() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [dailyChartData, setDailyChartData] = useState<DailyForecastPoint[]>([]);
+  const [calendarData, setCalendarData] = useState<DailyCalendarPoint[]>([]);
   const [monthlyChartData, setMonthlyChartData] = useState<MonthlyPerformancePoint[]>([]);
-  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily');
+  const [activeTab, setActiveTab] = useState<'visaoFuturo' | 'monthly'>('visaoFuturo');
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+  const [selectedMobileDay, setSelectedMobileDay] = useState<number | null>(null);
+
+  // Detectar mobile
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Ref e Estados para Rolagem Vertical da Tabela
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollVal, setScrollVal] = useState(0);
+  const [maxScroll, setMaxScroll] = useState(0);
+
+  const handleScroll = () => {
+    if (tableContainerRef.current) {
+      setScrollVal(tableContainerRef.current.scrollTop);
+    }
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    setScrollVal(val);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = val;
+    }
+  };
+
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+
+    const timer = setTimeout(() => {
+      setMaxScroll(el.scrollHeight - el.clientHeight);
+    }, 150);
+
+    const handleResize = () => {
+      setMaxScroll(el.scrollHeight - el.clientHeight);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [calendarData, activeTab]);
 
   // Totais de todos os tempos (Saldo da Conta)
   const [saldoConta, setSaldoConta] = useState(0);
@@ -80,7 +128,7 @@ export function Dashboard() {
 
       // 1. Inflows / Entradas do mês selecionado
       const eMensais = await entradasService.fetchEntradasMensais(mesAno);
-      const infThisMonth = eMensais.reduce((acc, e) => acc + (e.projetar ? (e.registro_atual?.valor_real || 0) : e.valor_previsto_base), 0);
+      const infThisMonth = eMensais.reduce((acc, e) => acc + (e.projetar ? ((e.registro_atual && Number(e.registro_atual.valor_real) > 0) ? Number(e.registro_atual.valor_real) : Number(e.valor_previsto_base)) : Number(e.valor_previsto_base)), 0);
       setTotalInflowsThisMonth(infThisMonth);
 
       // 2. Gastos Fixos
@@ -216,7 +264,8 @@ export function Dashboard() {
         { data: allGastosDiariosDb },
         { data: allFaturasDb },
         { data: allMovsReservaDb },
-        { data: allRegsReservaDb }
+        { data: allRegsReservaDb },
+        { data: allSalariosDb }
       ] = await Promise.all([
         // Registros de entradas recorrentes (projetadas) — valor_real é o recebido de fato
         supabase.from('registros_entradas').select('valor_real').in('id_entrada',
@@ -228,7 +277,8 @@ export function Dashboard() {
         supabase.from('registros_diarios').select('valor_gasto'),
         supabase.from('pagamentos_faturas').select('valor_pago').eq('pago', true),
         supabase.from('movimentacoes_reserva').select('*'),
-        supabase.from('registros_movimentacoes_reserva').select('*')
+        supabase.from('registros_movimentacoes_reserva').select('*'),
+        supabase.from('salario').select('*')
       ]);
 
       const allMovsReserva = allMovsReservaDb || [];
@@ -333,11 +383,31 @@ export function Dashboard() {
       setReservaPrevistoIn(calcReservaPrevIn);
       setReservaPrevistoOut(calcReservaPrevOut);
 
+      // Calcula o total acumulado de salários até hoje
+      let totalSalariosInflow = 0;
+      (allSalariosDb || []).forEach((s: any) => {
+        if (s.valor_real !== null && s.valor_real !== undefined) {
+          if (s.data_real && s.data_real <= todayIso) {
+            totalSalariosInflow += Number(s.valor_real);
+          }
+        } else if (s.valor_previsto > 0) {
+          const desvio = s.desvio_mes_deposito ?? 0;
+          const [y, m] = s.mes_ano.split('-').map(Number);
+          const dateDep = new Date(y, m - 1 + desvio, s.dia_previsto || 5);
+          const dateDepIso = `${dateDep.getFullYear()}-${String(dateDep.getMonth() + 1).padStart(2, '0')}-${String(dateDep.getDate()).padStart(2, '0')}`;
+          
+          if (dateDepIso <= todayIso) {
+            totalSalariosInflow += Number(s.valor_previsto);
+          }
+        }
+      });
+
       // Entradas recorrentes: soma o valor_real de cada registro (o que de fato entrou no mês)
       // Entradas pontuais: sempre usa valor_previsto_base (registro não sobrescreve o valor único)
       const totalInflows =
         (allRegEntradasDb || []).reduce((acc, r) => acc + Number(r.valor_real), 0) +
-        (allPontualEntradasDb || []).reduce((acc, e) => acc + Number(e.valor_previsto_base), 0);
+        (allPontualEntradasDb || []).reduce((acc, e) => acc + Number(e.valor_previsto_base), 0) +
+        totalSalariosInflow;
 
       const totalOutflows = 
         (allGastosFixosDb || []).reduce((acc, r) => acc + Number(r.valor_real), 0) +
@@ -346,12 +416,12 @@ export function Dashboard() {
 
       setSaldoConta(totalInflows + totalReservaInflows - totalOutflows - totalReservaOutflows);
 
-      // 6. Buscar histórico consolidado para os gráficos
-      const [dData, mData] = await Promise.all([
-        chartsService.getDailyBalanceForecast(currentMonth),
+      // 6. Buscar dados do calendário financeiro e desempenho mensal
+      const [calData, mData] = await Promise.all([
+        chartsService.getDailyCalendarData(currentMonth),
         chartsService.getMonthlyPerformance(currentMonth)
       ]);
-      setDailyChartData(dData);
+      setCalendarData(calData);
       setMonthlyChartData(mData);
 
     } catch (error) {
@@ -422,7 +492,7 @@ export function Dashboard() {
                 <Wallet size={20} color="var(--primary)" />
                 <h3 className="text-h3" style={{ margin: 0, fontSize: '1rem', color: 'var(--text-muted)' }}>Saldo em conta</h3>
               </div>
-              <span className="text-h1" style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: saldoConta >= 0 ? '#10b981' : 'var(--danger)' }}>
+              <span className="text-h1" style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: saldoConta >= 0 ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)' }}>
                 {formatBRL(saldoConta)}
               </span>
               <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.5rem', margin: 0 }}>
@@ -439,21 +509,21 @@ export function Dashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="text-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.875rem' }}>
-                    <TrendingUp size={16} color="#10b981" /> Receitas do Mês:
+                    <TrendingUp size={16} color="var(--color-verde-entradas)" /> Receitas do Mês:
                   </span>
-                  <span style={{ fontWeight: 600, color: '#10b981' }}>{formatBRL(totalInflowsThisMonth)}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-verde-entradas)' }}>{formatBRL(totalInflowsThisMonth)}</span>
                 </div>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="text-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.875rem' }}>
-                    <TrendingDown size={16} color="#ef4444" /> Despesas do Mês:
+                    <TrendingDown size={16} color="var(--color-vermelho-fixos)" /> Despesas do Mês:
                   </span>
-                  <span style={{ fontWeight: 600, color: '#ef4444' }}>{formatBRL(consolidatedOutflowThisMonth)}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-vermelho-fixos)' }}>{formatBRL(consolidatedOutflowThisMonth)}</span>
                 </div>
                 
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
                   <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Resultado Líquido:</span>
-                  <span style={{ fontWeight: 700, fontSize: '1.05rem', color: netPerformanceThisMonth >= 0 ? '#10b981' : 'var(--danger)' }}>
+                  <span style={{ fontWeight: 700, fontSize: '1.05rem', color: netPerformanceThisMonth >= 0 ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)' }}>
                     {formatBRL(netPerformanceThisMonth)}
                   </span>
                 </div>
@@ -461,27 +531,83 @@ export function Dashboard() {
             </Card>
           </div>
 
-          {/* ----------------- RECHARTS CHART BOX (DUAL TABS) ----------------- */}
+          {/* ----------------- ANÁLISE FINANCEIRA (DUAL TABS: VISÃO DO FUTURO & DESEMPENHO MENSAL) ----------------- */}
           <Card style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <style>{`
+              .vf-table-container::-webkit-scrollbar { display: none; }
+              .vf-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; }
+              .vf-table thead { position: sticky; top: 0; z-index: 2; }
+              .vf-table th { background: var(--bg-card, #fff); border-bottom: 2px solid var(--border-color); padding: 0.5rem 0.625rem; text-align: right; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); white-space: nowrap; }
+              .vf-table th:first-child { text-align: center; width: 42px; }
+              .vf-table td { padding: 0.4rem 0.625rem; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap; transition: background 0.15s; }
+              .vf-table td:first-child { text-align: center; font-weight: 600; color: var(--text-muted); font-size: 0.75rem; }
+              .vf-table tbody tr:hover td { background: rgba(99, 102, 241, 0.03); }
+              .vf-row-today td { border-left: 3px solid var(--primary) !important; background: rgba(99, 102, 241, 0.04) !important; }
+              .vf-row-today td:first-child { border-left: 3px solid var(--primary) !important; }
+              .vf-val-previsto { opacity: 0.6; font-style: italic; }
+              .vf-val-executado { font-weight: 600; opacity: 1; }
+              .vf-tooltip { position: absolute; z-index: 10; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; box-shadow: var(--shadow-lg); min-width: 220px; max-width: 320px; pointer-events: none; font-size: 0.8rem; }
+              .vf-tooltip-item { display: flex; justify-content: space-between; gap: 1rem; padding: 0.15rem 0; }
+              .vf-tooltip-item-exec { font-weight: 600; }
+              .vf-tooltip-item-prev { opacity: 0.6; font-style: italic; }
+              .vf-slider-vertical { writing-mode: vertical-lr; width: 8px; height: 100%; max-height: 380px; accent-color: var(--primary); cursor: pointer; border-radius: 4px; border: none; outline: none; background: var(--border-color); }
+
+              /* --- MOBILE: tabela simplificada --- */
+              .vf-desktop-view { display: flex; }
+              .vf-mobile-view { display: none; }
+              .vf-mobile-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.95rem; }
+              .vf-mobile-table th { background: var(--bg-card, #fff); border-bottom: 2px solid var(--border-color); padding: 0.6rem 0.75rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+              .vf-mobile-table th:first-child { text-align: center; width: 50px; }
+              .vf-mobile-table th:last-child { text-align: right; }
+              .vf-mobile-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border-color); transition: background 0.15s; cursor: pointer; }
+              .vf-mobile-table td:first-child { text-align: center; font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
+              .vf-mobile-table td:last-child { text-align: right; font-weight: 700; font-size: 0.95rem; }
+              .vf-mobile-table tbody tr:active td { background: rgba(99, 102, 241, 0.06); }
+              .vf-mobile-table .vf-row-today td { border-left: 3px solid var(--primary) !important; background: rgba(99, 102, 241, 0.04); }
+              .vf-mobile-row-has-items td:last-child::after { content: ' \\203A'; font-size: 1.1rem; color: var(--text-muted); margin-left: 0.25rem; }
+
+              /* Modal detail items on mobile */
+              .vf-modal-section { margin-bottom: 1rem; }
+              .vf-modal-section-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); }
+              .vf-modal-item { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.35rem 0; font-size: 0.9rem; }
+              .vf-modal-item-exec { font-weight: 600; }
+              .vf-modal-item-prev { opacity: 0.6; font-style: italic; }
+              .vf-modal-summary { display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0; border-top: 2px solid var(--border-color); margin-top: 0.5rem; font-size: 1rem; font-weight: 700; }
+
+              @media (max-width: 768px) {
+                .vf-table { font-size: 0.7rem; }
+                .vf-table th, .vf-table td { padding: 0.3rem 0.4rem; }
+                .vf-col-reserva { display: none; }
+                .vf-desktop-view { display: none !important; }
+                .vf-mobile-view { display: block !important; }
+              }
+            `}</style>
+
+            {/* Header com Abas */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '1rem' }}>
               <h2 className="text-h2" style={{ margin: 0, fontSize: '1.25rem' }}>Análise Financeira</h2>
+              
               <div style={{ display: 'flex', gap: '0.5rem', backgroundColor: 'var(--bg-muted, #f1f5f9)', padding: '0.25rem', borderRadius: '8px' }}>
                 <button
-                  onClick={() => setActiveTab('daily')}
+                  onClick={() => setActiveTab('visaoFuturo')}
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
                     padding: '0.375rem 0.75rem',
                     borderRadius: '6px',
                     border: 'none',
                     fontSize: '0.875rem',
                     fontWeight: 500,
                     cursor: 'pointer',
-                    backgroundColor: activeTab === 'daily' ? 'var(--bg-card, #ffffff)' : 'transparent',
-                    color: activeTab === 'daily' ? 'var(--text-color, #1e293b)' : 'var(--text-muted, #64748b)',
-                    boxShadow: activeTab === 'daily' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
+                    backgroundColor: activeTab === 'visaoFuturo' ? 'var(--bg-card, #ffffff)' : 'transparent',
+                    color: activeTab === 'visaoFuturo' ? 'var(--primary, #3b82f6)' : 'var(--text-muted, #64748b)',
+                    boxShadow: activeTab === 'visaoFuturo' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
                     transition: 'all 0.2s'
                   }}
                 >
-                  Previsão de Saldo Diário
+                  <Eye size={16} />
+                  Visão do Futuro
                 </button>
                 <button
                   onClick={() => setActiveTab('monthly')}
@@ -502,95 +628,277 @@ export function Dashboard() {
                 </button>
               </div>
             </div>
-            
-            {activeTab === 'daily' && (
-              <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '0.5rem', fontSize: '12px', color: 'var(--text-muted)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--primary, #3b82f6)' }}></div>
-                  <span>Saldo Previsto</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--danger, #ef4444)' }}></div>
-                  <span>Fatura Anterior Atrasada</span>
-                </div>
-              </div>
-            )}
 
-            {activeTab === 'monthly' && (
-              <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '0.5rem', fontSize: '12px', color: 'var(--text-muted)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#10b981' }}></div>
-                  <span>Receitas</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444' }}></div>
-                  <span>Despesas</span>
-                </div>
-              </div>
-            )}
-            
-            <div style={{ width: '100%', height: 320, marginTop: '0.5rem' }}>
-              {activeTab === 'daily' ? (
-                <div className="scrollable-chart-outer" style={{ width: '100%', height: '100%', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                  <style>{`.scrollable-chart-outer::-webkit-scrollbar { display: none; }`}</style>
-                  <div style={{ minWidth: 'max(100%, 750px)', height: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                        <XAxis dataKey="diaFormatado" stroke="var(--text-muted)" fontSize={12} tickLine={false} />
-                        <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$ ${val}`} />
-                        <Tooltip content={({ active, payload }: any) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div style={{
-                                backgroundColor: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                padding: '0.75rem',
-                                borderRadius: '8px',
-                                boxShadow: 'var(--shadow-lg)'
-                              }}>
-                                <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.25rem' }}>
-                                  Dia {data.diaFormatado} de {new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(currentMonth)}
-                                </p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                  <p style={{ margin: 0, color: 'var(--primary)', fontSize: '0.875rem' }}>
-                                    Saldo Previsto: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.saldo)}</strong>
-                                  </p>
-                                  {data.atrasada && (
-                                    <p style={{ margin: 0, color: 'var(--danger, #ef4444)', fontSize: '0.75rem', fontWeight: 'bold', marginTop: '0.25rem' }}>
-                                      ⚠️ Fatura do Mês Anterior Atrasada!
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }} />
-                        <Line
-                          type="monotone"
-                          dataKey="saldo"
-                          stroke="var(--primary)"
-                          strokeWidth={3}
-                          dot={({ cx, cy, payload }) => {
-                            if (payload.atrasada) {
-                              return (
-                                <circle cx={cx} cy={cy} r={5} fill="var(--danger, #ef4444)" stroke="#fff" strokeWidth={2} />
-                              );
-                            }
-                            return (
-                              <circle cx={cx} cy={cy} r={3} fill="var(--primary)" />
-                            );
-                          }}
-                          activeDot={{ r: 6 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+            {/* ABA 1: VISÃO DO FUTURO */}
+            {activeTab === 'visaoFuturo' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{ fontWeight: 600, opacity: 1 }}>●</span>
+                    <span>Executado</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{ opacity: 0.5, fontStyle: 'italic' }}>○</span>
+                    <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Previsto</span>
                   </div>
                 </div>
-              ) : (
-                <div className="scrollable-chart-outer" style={{ width: '100%', height: '100%', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+
+                <div className="vf-desktop-view" style={{ gap: '0.75rem', alignItems: 'stretch', position: 'relative' }}>
+                  {/* Tabela Principal */}
+                  <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                    <div ref={!isMobile ? tableContainerRef : undefined} onScroll={!isMobile ? handleScroll : undefined} className="vf-table-container" style={{ maxHeight: 380, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                      <table className="vf-table">
+                        <thead>
+                          <tr>
+                            <th>Dia</th>
+                            <th style={{ color: 'var(--color-verde-entradas)' }}>Entradas</th>
+                            <th style={{ color: 'var(--color-vermelho-fixos)' }}>Saídas Fixas</th>
+                            <th style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>Saídas Diárias</th>
+                            <th style={{ color: 'var(--primary)' }}>Saldo Conta</th>
+                            <th className="vf-col-reserva">Reserva</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {calendarData.map((point) => {
+                            const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
+                            const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
+                            let saldoColor = 'var(--color-verde-entradas)';
+                            if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
+                            else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
+                            else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
+
+                            const hasEntradas = point.totalEntradas > 0;
+                            const hasSaidasFixas = point.totalSaidasFixas > 0;
+                            const hasSaidasDiarias = point.totalSaidasDiarias > 0;
+                            const allEntradasExec = point.entradas.length > 0 && point.entradas.every(i => i.isExecutado);
+                            const allFixasExec = point.saidasFixas.length > 0 && point.saidasFixas.every(i => i.isExecutado);
+                            const allDiariasExec = point.saidasDiarias.length > 0 && point.saidasDiarias.every(i => i.isExecutado);
+
+                            const renderCellValue = (total: number, hasItems: boolean, allExec: boolean, color: string) => {
+                              if (!hasItems) return <span style={{ color: 'var(--text-muted)', opacity: 0.3 }}>—</span>;
+                              return (
+                                <span className={allExec ? 'vf-val-executado' : 'vf-val-previsto'} style={{ color }}>
+                                  {formatBRL(total)}
+                                </span>
+                              );
+                            };
+
+                            return (
+                              <tr
+                                key={point.dia}
+                                className={point.isToday ? 'vf-row-today' : ''}
+                                onMouseEnter={() => setHoveredDay(point.dia)}
+                                onMouseLeave={() => setHoveredDay(null)}
+                                style={{ cursor: (point.entradas.length > 0 || point.saidasFixas.length > 0 || point.saidasDiarias.length > 0) ? 'help' : 'default' }}
+                              >
+                                <td>{point.diaFormatado}</td>
+                                <td>{renderCellValue(point.totalEntradas, hasEntradas, allEntradasExec, 'var(--color-verde-entradas)')}</td>
+                                <td>{renderCellValue(point.totalSaidasFixas, hasSaidasFixas, allFixasExec, 'var(--color-vermelho-fixos)')}</td>
+                                <td>{renderCellValue(point.totalSaidasDiarias, hasSaidasDiarias, allDiariasExec, 'var(--color-laranja-diarios, var(--warning))')}</td>
+                                <td style={{ fontWeight: 700, color: saldoColor }}>{formatBRL(point.saldoConta)}</td>
+                                <td className="vf-col-reserva" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{formatBRL(point.saldoReserva)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Tooltip */}
+                    {hoveredDay !== null && (() => {
+                      const point = calendarData.find(p => p.dia === hoveredDay);
+                      if (!point || (point.entradas.length === 0 && point.saidasFixas.length === 0 && point.saidasDiarias.length === 0)) return null;
+                      return (
+                        <div className="vf-tooltip" style={{ top: 0, right: 0, transform: 'translateY(40px)' }}>
+                          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.35rem' }}>
+                            Dia {point.diaFormatado} de {currentMonth.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
+                          </p>
+                          {point.entradas.length > 0 && (
+                            <div style={{ marginBottom: '0.35rem' }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-verde-entradas)', textTransform: 'uppercase' }}>Entradas</span>
+                              {point.entradas.map((item, i) => (
+                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
+                                  <span style={{ color: 'var(--color-verde-entradas)' }}>+{formatBRL(item.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {point.saidasFixas.length > 0 && (
+                            <div style={{ marginBottom: '0.35rem' }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-vermelho-fixos)', textTransform: 'uppercase' }}>Saídas Fixas</span>
+                              {point.saidasFixas.map((item, i) => (
+                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
+                                  <span style={{ color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(item.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {point.saidasDiarias.length > 0 && (
+                            <div>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-laranja-diarios, var(--warning))', textTransform: 'uppercase' }}>Saídas Diárias</span>
+                              {point.saidasDiarias.map((item, i) => (
+                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
+                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
+                                  <span style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(item.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Slider Vertical na Lateral Direita */}
+                  {maxScroll > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0', gap: '0.5rem' }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={maxScroll}
+                        value={scrollVal}
+                        onChange={handleSliderChange}
+                        className="vf-slider-vertical"
+                        title="Rolar dias na tabela"
+                      />
+                    </div>
+                  )}
+                </div>
+
+              {/* === MOBILE VIEW === */}
+              <div className="vf-mobile-view">
+                <div ref={isMobile ? tableContainerRef : undefined} onScroll={isMobile ? handleScroll : undefined} style={{ maxHeight: 420, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  <table className="vf-mobile-table">
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
+                      <tr>
+                        <th>Dia</th>
+                        <th>Saldo em Conta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calendarData.map((point) => {
+                        const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
+                        const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
+                        let saldoColor = 'var(--color-verde-entradas)';
+                        if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
+                        else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
+                        else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
+
+                        const hasItems = point.entradas.length > 0 || point.saidasFixas.length > 0 || point.saidasDiarias.length > 0;
+
+                        return (
+                          <tr
+                            key={point.dia}
+                            className={`${point.isToday ? 'vf-row-today' : ''} ${hasItems ? 'vf-mobile-row-has-items' : ''}`}
+                            onClick={() => setSelectedMobileDay(point.dia)}
+                          >
+                            <td>{point.diaFormatado}</td>
+                            <td style={{ color: saldoColor }}>{formatBRL(point.saldoConta)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+            {/* Modal de Detalhes do Dia (Mobile) */}
+            {selectedMobileDay !== null && (() => {
+              const point = calendarData.find(p => p.dia === selectedMobileDay);
+              if (!point) return null;
+              const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
+              const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
+              let saldoColor = 'var(--color-verde-entradas)';
+              if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
+              else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
+              else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
+
+              return (
+                <Modal isOpen={true} onClose={() => setSelectedMobileDay(null)} title={`Dia ${point.diaFormatado}`}>
+                  <div>
+                    {point.entradas.length > 0 && (
+                      <div className="vf-modal-section">
+                        <div className="vf-modal-section-title" style={{ color: 'var(--color-verde-entradas)' }}>Entradas</div>
+                        {point.entradas.map((item, i) => (
+                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
+                            <span>{item.descricao}</span>
+                            <span style={{ color: 'var(--color-verde-entradas)' }}>+{formatBRL(item.valor)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
+                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-verde-entradas)' }}>+{formatBRL(point.totalEntradas)}</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {point.saidasFixas.length > 0 && (
+                      <div className="vf-modal-section">
+                        <div className="vf-modal-section-title" style={{ color: 'var(--color-vermelho-fixos)' }}>Saídas Fixas</div>
+                        {point.saidasFixas.map((item, i) => (
+                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
+                            <span>{item.descricao}</span>
+                            <span style={{ color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(item.valor)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
+                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(point.totalSaidasFixas)}</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {point.saidasDiarias.length > 0 && (
+                      <div className="vf-modal-section">
+                        <div className="vf-modal-section-title" style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>Saídas Diárias</div>
+                        {point.saidasDiarias.map((item, i) => (
+                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
+                            <span>{item.descricao}</span>
+                            <span style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(item.valor)}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
+                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(point.totalSaidasDiarias)}</strong>
+                        </div>
+                      </div>
+                    )}
+
+                    {point.entradas.length === 0 && point.saidasFixas.length === 0 && point.saidasDiarias.length === 0 && (
+                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0', fontSize: '0.9rem' }}>
+                        Nenhuma movimentação neste dia.
+                      </p>
+                    )}
+
+                    <div className="vf-modal-summary">
+                      <span style={{ color: 'var(--primary)' }}>Saldo em Conta</span>
+                      <span style={{ color: saldoColor }}>{formatBRL(point.saldoConta)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', paddingTop: '0.25rem' }}>
+                      <span>Reserva</span>
+                      <span>{formatBRL(point.saldoReserva)}</span>
+                    </div>
+                  </div>
+                </Modal>
+              );
+            })()}
+
+            {/* ABA 2: DESEMPENHO MENSAL */}
+            {activeTab === 'monthly' && (
+              <div>
+                <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '0.75rem', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-verde-entradas)' }}></div>
+                    <span>Receitas</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-vermelho-fixos)' }}></div>
+                    <span>Despesas</span>
+                  </div>
+                </div>
+
+                <div className="scrollable-chart-outer" style={{ width: '100%', height: 350, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                   <style>{`.scrollable-chart-outer::-webkit-scrollbar { display: none; }`}</style>
                   <div style={{ minWidth: 'max(100%, 500px)', height: '100%' }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -613,13 +921,13 @@ export function Dashboard() {
                                   {data.mesAnoFormatado}
                                 </p>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                  <p style={{ margin: 0, color: '#10b981', fontSize: '0.875rem' }}>
+                                  <p style={{ margin: 0, color: 'var(--color-verde-entradas)', fontSize: '0.875rem' }}>
                                     Receitas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.receitas)}</strong>
                                   </p>
-                                  <p style={{ margin: 0, color: '#ef4444', fontSize: '0.875rem' }}>
+                                  <p style={{ margin: 0, color: 'var(--color-vermelho-fixos)', fontSize: '0.875rem' }}>
                                     Despesas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.despesas)}</strong>
                                   </p>
-                                  <p style={{ margin: 0, color: data.receitas - data.despesas >= 0 ? '#10b981' : '#ef4444', fontSize: '0.875rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
+                                  <p style={{ margin: 0, color: data.receitas - data.despesas >= 0 ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)', fontSize: '0.875rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
                                     Resultado: <span>{formatBRL(data.receitas - data.despesas)}</span>
                                   </p>
                                 </div>
@@ -628,14 +936,14 @@ export function Dashboard() {
                           }
                           return null;
                         }} />
-                        <Bar name="Receitas" dataKey="receitas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={25} />
-                        <Bar name="Despesas" dataKey="despesas" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={25} />
+                        <Bar name="Receitas" dataKey="receitas" fill="var(--color-verde-entradas)" radius={[4, 4, 0, 0]} maxBarSize={25} />
+                        <Bar name="Despesas" dataKey="despesas" fill="var(--color-vermelho-fixos)" radius={[4, 4, 0, 0]} maxBarSize={25} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </Card>
 
           {/* ----------------- BOX "CONTA REAL VS PROJETADA" (BELOW CHART) ----------------- */}
@@ -751,7 +1059,7 @@ export function Dashboard() {
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
                       <span className="text-muted">Fatura Anterior ({prevMesAnoFormatado}):</span>
-                      <span style={{ fontWeight: 600, color: faturaPrevStatus?.pago ? '#10b981' : 'var(--danger)' }}>
+                      <span style={{ fontWeight: 600, color: faturaPrevStatus?.pago ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)' }}>
                         {formatBRL(ccBillPreviousMonth)} ({faturaPrevStatus?.pago ? 'Paga' : 'Aberta'})
                       </span>
                     </div>
@@ -759,7 +1067,7 @@ export function Dashboard() {
                     {isFaturaPrevPendente && (
                       showFaturaWarning ? (
                         <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-vermelho-fixos)', fontWeight: 700, display: 'block', marginBottom: '0.5rem' }}>
                             ⚠️ Fatura vencida dia 10!
                           </span>
                           <Button 
@@ -768,7 +1076,7 @@ export function Dashboard() {
                               setIsCCPaymentModalOpen(true);
                             }} 
                             disabled={isSubmitting}
-                            style={{ backgroundColor: 'var(--danger)', color: 'white', width: '100%', justifyContent: 'center', padding: '0.5rem' }}
+                            style={{ backgroundColor: 'var(--color-vermelho-fixos)', color: 'white', width: '100%', justifyContent: 'center', padding: '0.5rem' }}
                           >
                             Pagar Fatura
                           </Button>
@@ -812,17 +1120,17 @@ export function Dashboard() {
               valueDisplay={
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '100%' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                    <span className="text-h2" style={{ margin: 0, color: '#10b981' }}>
+                    <span className="text-h2" style={{ margin: 0, color: 'var(--color-verde-entradas)' }}>
                       {formatBRL(saldoReserva)}
                     </span>
                   </div>
                   {saldoDevedorReserva > 0 && (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--danger)', fontWeight: 700 }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--color-vermelho-fixos)', fontWeight: 700 }}>
                       Valores a Repor: {formatBRL(saldoDevedorReserva)}
                     </span>
                   )}
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                    Previsto no mês: <span style={{ color: '#10b981', fontWeight: 600 }}>+{formatBRL(reservaPrevistoIn)}</span> / <span style={{ color: 'var(--text-color)', fontWeight: 600 }}>-{formatBRL(reservaPrevistoOut)}</span>
+                    Previsto no mês: <span style={{ color: 'var(--color-verde-entradas)', fontWeight: 600 }}>+{formatBRL(reservaPrevistoIn)}</span> / <span style={{ color: 'var(--text-color)', fontWeight: 600 }}>-{formatBRL(reservaPrevistoOut)}</span>
                   </div>
                 </div>
               }

@@ -1,33 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
-import { Loader2, ArrowUpRight, Wallet, CreditCard, Calendar, PiggyBank } from 'lucide-react';
+import { Loader2, ArrowUpRight, Wallet, CreditCard, Calendar, PiggyBank, TrendingUp } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { supabase } from '../lib/supabase';
-import { getLocalYearMonth } from '../services/gastosFixos';
 
-const addMonths = (mesAno: string, count: number): string => {
-  const [y, m] = mesAno.split('-').map(Number);
-  const date = new Date(y, m - 1 + count, 1);
-  const newY = date.getFullYear();
-  const newM = String(date.getMonth() + 1).padStart(2, '0');
-  return `${newY}-${newM}`;
-};
-
-const formatMesAnoStr = (mesAno: string) => {
-  const [y, m] = mesAno.split('-').map(Number);
-  const mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return `${mesesAbrev[m - 1]}/${String(y).slice(-2)}`;
-};
 
 interface Movimento {
   id: string;
   dia: number;
   descricao: string;
   tipo: 'inflow' | 'outflow';
-  origem: 'entrada' | 'fixo' | 'diario' | 'fatura' | 'reserva';
+  origem: 'entrada' | 'fixo' | 'diario' | 'fatura' | 'reserva' | 'salario';
   status: 'realizado' | 'pago' | 'provisionado' | 'atrasado';
   valor: number;
   saldoPosMovimento?: number;
+  createdAt: string;
 }
 
 export function Extrato() {
@@ -40,13 +27,6 @@ export function Extrato() {
   const [isLoading, setIsLoading] = useState(true);
   const [saldoInicial, setSaldoInicial] = useState(0);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
-  const [entradasCompetenciaOutroMes, setEntradasCompetenciaOutroMes] = useState<{
-    id: string;
-    descricao: string;
-    valor: number;
-    dataRecebimento: string;
-    tipoDesvio: 'antecipado' | 'atrasado';
-  }[]>([]);
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -66,6 +46,34 @@ export function Extrato() {
     return null;
   };
 
+  const addMonths = (mesAno: string, count: number): string => {
+    const [y, m] = mesAno.split('-').map(Number);
+    const date = new Date(y, m - 1 + count, 1);
+    const newY = date.getFullYear();
+    const newM = String(date.getMonth() + 1).padStart(2, '0');
+    return `${newY}-${newM}`;
+  };
+
+  const getSalarioForMonth = (dbSalarios: any[], mesAno: string) => {
+    const exact = dbSalarios.find(s => s.mes_ano === mesAno);
+    if (exact) return exact;
+
+    const inherited = [...dbSalarios]
+      .filter(s => s.mes_ano <= mesAno)
+      .sort((a, b) => b.mes_ano.localeCompare(a.mes_ano))[0];
+
+    if (inherited) {
+      return {
+        ...inherited,
+        mes_ano: mesAno,
+        valor_real: null,
+        data_real: null,
+        id: ''
+      };
+    }
+    return null;
+  };
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -81,7 +89,8 @@ export function Extrato() {
         { data: dbComprasParceladas },
         { data: dbPagamentosFaturas },
         { data: dbMovsReserva },
-        { data: dbRegsReserva }
+        { data: dbRegsReserva },
+        { data: dbSalarios }
       ] = await Promise.all([
         supabase.from('entradas').select('*'),
         supabase.from('registros_entradas').select('*'),
@@ -92,7 +101,8 @@ export function Extrato() {
         supabase.from('compras_parceladas').select('*'),
         supabase.from('pagamentos_faturas').select('*'),
         supabase.from('movimentacoes_reserva').select('*'),
-        supabase.from('registros_movimentacoes_reserva').select('*')
+        supabase.from('registros_movimentacoes_reserva').select('*'),
+        supabase.from('salario').select('*')
       ]);
 
       const entradas = dbEntradas || [];
@@ -105,6 +115,7 @@ export function Extrato() {
       const pagamentosFaturas = dbPagamentosFaturas || [];
       const dbMovsReservaList = dbMovsReserva || [];
       const dbRegsReservaList = dbRegsReserva || [];
+      const salarios = dbSalarios || [];
 
       // 2. Determinar intervalo de meses passados
       let startYear = year - 1;
@@ -140,11 +151,25 @@ export function Extrato() {
         tempDate.setMonth(tempDate.getMonth() + 1);
       }
 
+      // Build virtualSalarios for past, current and next months
+      const minMonth = pastMonths.length > 0 ? pastMonths[0] : mesAno;
+      const maxReferenceMonth = addMonths(mesAno, 2);
+
+      const virtualSalarios: any[] = [];
+      let tempM = minMonth;
+      while (tempM <= maxReferenceMonth) {
+        const sal = getSalarioForMonth(salarios || [], tempM);
+        if (sal) {
+          virtualSalarios.push(sal);
+        }
+        tempM = addMonths(tempM, 1);
+      }
+
       // 3. Calcular saldo inicial acumulado retroativamente até M-1
       let saldoAcumulado = 0;
 
       for (const m of pastMonths) {
-        // Receitas (Caixa Físico)
+        // Receitas — entradas normais
         let inflowsM = 0;
         const pontuaisEmM = entradas.filter(e => !e.projetar && e.data_entrada.substring(0, 7) === m);
         pontuaisEmM.forEach(e => {
@@ -153,38 +178,54 @@ export function Extrato() {
 
         const recorrentesEmM = entradas.filter(e => {
           if (!e.projetar) return false;
-          const d = e.desvio_competencia || 0;
-          const C = addMonths(m, d);
-          const competenciaInicio = addMonths(e.data_entrada.substring(0, 7), d);
-          const startsOnOrBefore = competenciaInicio <= C;
-          const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= C;
-          return startsOnOrBefore && endsOnOrAfter;
+          const startMonth = e.data_entrada.substring(0, 7);
+          return startMonth <= m && (!e.mes_ano_fim || e.mes_ano_fim >= m);
         });
 
         recorrentesEmM.forEach(e => {
-          const d = e.desvio_competencia || 0;
-          const C = addMonths(m, d);
-          const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === C);
-          if (reg) {
+          const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === m);
+          if (reg && Number(reg.valor_real) > 0) {
             inflowsM += Number(reg.valor_real);
           } else if (e.ativo) {
             inflowsM += Number(e.valor_previsto_base);
           }
         });
 
-        // Despesas Fixas
-        let fixedM = 0;
-        const fixosVigentes = gastosFixos.filter(f => {
-          const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= m;
-          return isCreated && (f.ativo || regGastosFixos.some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
-        });
+        // Salário cujo recebimento físico ocorreu no mês m
+        let salarioMTotal = 0;
+        virtualSalarios.forEach(s => {
+          let physicalMonth = '';
+          if (s.data_real) {
+            physicalMonth = s.data_real.substring(0, 7);
+          } else {
+            const desvio = s.desvio_mes_deposito ?? 0;
+            physicalMonth = addMonths(s.mes_ano, desvio);
+          }
 
-        fixosVigentes.forEach(f => {
-          const reg = regGastosFixos.find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
-          if (reg) {
-            fixedM += Number(reg.valor_real);
-          } else if (f.ativo) {
-            fixedM += Number(f.valor_previsto_base);
+          if (physicalMonth === m) {
+            if (s.valor_real !== null && s.valor_real !== undefined) {
+              salarioMTotal += Number(s.valor_real);
+            } else if (s.valor_previsto > 0) {
+              salarioMTotal += Number(s.valor_previsto);
+            }
+          }
+        });
+        inflowsM += salarioMTotal;
+
+        // Despesas Fixas (caixa físico saído em m)
+        let fixedM = 0;
+        regGastosFixos.forEach(reg => {
+          const parent = gastosFixos.find(f => f.id === reg.id_gasto_fixo);
+          if (parent) {
+            let pagouEmM = false;
+            if (reg.data_pagamento_real) {
+              pagouEmM = reg.data_pagamento_real.substring(0, 7) === m;
+            } else if (reg.dia_pagamento_real) {
+              pagouEmM = reg.mes_ano === m;
+            }
+            if (pagouEmM && Number(reg.valor_real) > 0) {
+              fixedM += Number(reg.valor_real);
+            }
           }
         });
 
@@ -229,20 +270,15 @@ export function Extrato() {
 
       setSaldoInicial(saldoAcumulado);
 
-      // 4. Mapear e estruturar todos os movimentos do mês selecionado (M)
+      // 4. Mapear movimentos do mês selecionado (M)
       const listMovimentos: Movimento[] = [];
 
-      // A1. Lançamentos físicos de caixa de entradas que caíram em mesAno
+      // A. Entradas normais
       const pontuaisNoMes = entradas.filter(e => !e.projetar && e.data_entrada.substring(0, 7) === mesAno);
-      
-      const recorrentesFisicosNoMes = entradas.filter(e => {
+      const recorrentesNoMes = entradas.filter(e => {
         if (!e.projetar) return false;
-        const d = e.desvio_competencia || 0;
-        const C = addMonths(mesAno, d);
-        const competenciaInicio = addMonths(e.data_entrada.substring(0, 7), d);
-        const startsOnOrBefore = competenciaInicio <= C;
-        const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= C;
-        return startsOnOrBefore && endsOnOrAfter;
+        const startMonth = e.data_entrada.substring(0, 7);
+        return startMonth <= mesAno && (!e.mes_ano_fim || e.mes_ano_fim >= mesAno);
       });
 
       pontuaisNoMes.forEach(e => {
@@ -254,113 +290,108 @@ export function Extrato() {
           tipo: 'inflow',
           origem: 'entrada',
           status: 'realizado',
-          valor: Number(e.valor_previsto_base)
+          valor: Number(e.valor_previsto_base),
+          createdAt: e.created_at
         });
       });
 
-      recorrentesFisicosNoMes.forEach(e => {
+      recorrentesNoMes.forEach(e => {
         const entryDay = Number(e.data_entrada.split('-')[2]);
-        const d = e.desvio_competencia || 0;
-        const C = addMonths(mesAno, d); // Competência correspondente
-        const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === C);
-        
-        let desc = e.descricao;
-        if (d === 1) {
-          desc = `${e.descricao} (Competência ${formatMesAnoStr(C)})`;
-        } else if (d === -1) {
-          desc = `${e.descricao} (Competência ${formatMesAnoStr(C)})`;
-        }
+        const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === mesAno);
 
-        if (reg) {
+        if (reg && Number(reg.valor_real) > 0) {
           listMovimentos.push({
             id: `inflow-${e.id}-real`,
             dia: entryDay,
-            descricao: `${desc} (Realizado)`,
+            descricao: `${e.descricao} (Realizado)`,
             tipo: 'inflow',
             origem: 'entrada',
             status: 'realizado',
-            valor: Number(reg.valor_real)
-          });
-        } else if (e.ativo) {
-          listMovimentos.push({
-            id: `inflow-${e.id}-proj`,
-            dia: entryDay,
-            descricao: `${desc} (Provisionada)`,
-            tipo: 'inflow',
-            origem: 'entrada',
-            status: 'provisionado',
-            valor: Number(e.valor_previsto_base)
+            valor: Number(reg.valor_real),
+            createdAt: reg.created_at
           });
         }
       });
 
-      // A2. Entradas de competência mesAno que caíram em outros meses
-      const compOutroMes: any[] = [];
-      const todasEntradasCompetencia = entradas.filter(e => {
-        if (!e.projetar) return false;
-        const d = e.desvio_competencia || 0;
-        const competenciaInicio = addMonths(e.data_entrada.substring(0, 7), d);
-        const startsOnOrBefore = competenciaInicio <= mesAno;
-        const endsOnOrAfter = !e.mes_ano_fim || e.mes_ano_fim >= mesAno;
-        return startsOnOrBefore && endsOnOrAfter;
-      });
+      // B. Salário — aparece no extrato no dia real ou previsto de recebimento
+      virtualSalarios.forEach(s => {
+        let physicalMonth = '';
+        let physicalDay = 0;
+        let isReal = false;
 
-      todasEntradasCompetencia.forEach(e => {
-        const d = e.desvio_competencia || 0;
-        if (d !== 0) {
-          const mesFisico = addMonths(mesAno, -d);
-          const diaFisico = e.data_entrada.split('-')[2];
-          
-          const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === mesAno);
-          const valor = reg ? Number(reg.valor_real) : Number(e.valor_previsto_base);
-
-          compOutroMes.push({
-            id: e.id,
-            descricao: e.descricao,
-            valor,
-            dataRecebimento: `${diaFisico}/${mesFisico.split('-')[1]}`,
-            tipoDesvio: d > 0 ? 'antecipado' : 'atrasado'
-          });
-        }
-      });
-      setEntradasCompetenciaOutroMes(compOutroMes);
-
-      // B. Gastos Fixos
-      const activeFixos = gastosFixos.filter(f => {
-        const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= mesAno;
-        return isCreated && (f.ativo || regGastosFixos.some(r => r.id_gasto_fixo === f.id && r.mes_ano === mesAno));
-      });
-
-      activeFixos.forEach(f => {
-        const reg = regGastosFixos.find(r => r.id_gasto_fixo === f.id && r.mes_ano === mesAno);
-        const hasRealPaid = reg && reg.valor_real > 0;
-
-        if (hasRealPaid) {
-          const paidDay = (reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0) ? reg!.dia_pagamento_real : f.dia_pagamento_previsto;
-          listMovimentos.push({
-            id: `fixed-${f.id}-real`,
-            dia: paidDay,
-            descricao: `${f.nome} (Pago)`,
-            tipo: 'outflow',
-            origem: 'fixo',
-            status: 'pago',
-            valor: Number(reg!.valor_real)
-          });
+        if (s.data_real) {
+          physicalMonth = s.data_real.substring(0, 7);
+          physicalDay = Number(s.data_real.split('-')[2]);
+          isReal = true;
         } else {
-          const previsto = reg && reg.valor_previsto_ajustado !== null ? reg.valor_previsto_ajustado : f.valor_previsto_base;
-          listMovimentos.push({
-            id: `fixed-${f.id}-proj`,
-            dia: f.dia_pagamento_previsto,
-            descricao: `${f.nome} (Provisionado)`,
-            tipo: 'outflow',
-            origem: 'fixo',
-            status: 'provisionado',
-            valor: Number(previsto)
-          });
+          const desvio = s.desvio_mes_deposito ?? 0;
+          physicalMonth = addMonths(s.mes_ano, desvio);
+          physicalDay = s.dia_previsto || 5;
+        }
+
+        if (physicalMonth === mesAno) {
+          if (isReal) {
+            listMovimentos.push({
+              id: `salario-${s.mes_ano}-real`,
+              dia: physicalDay,
+              descricao: `Salário ${s.mes_ano.split('-').reverse().map((v: string, i: number) => i === 0 ? v : v.padStart(2, '0')).join('/')} (Recebido)`,
+              tipo: 'inflow',
+              origem: 'salario',
+              status: 'realizado',
+              valor: Number(s.valor_real),
+              createdAt: s.created_at
+            });
+          } else {
+            listMovimentos.push({
+              id: `salario-${s.mes_ano}-previsto`,
+              dia: physicalDay,
+              descricao: `Salário ${s.mes_ano.split('-').reverse().map((v: string, i: number) => i === 0 ? v : v.padStart(2, '0')).join('/')} (Previsão)`,
+              tipo: 'inflow',
+              origem: 'salario',
+              status: 'provisionado',
+              valor: Number(s.valor_previsto),
+              createdAt: s.created_at || new Date().toISOString()
+            });
+          }
         }
       });
 
-      // C. Fatura Cartão de Crédito
+      // C. Gastos Fixos — pagos fisicamente neste mês
+      regGastosFixos.forEach(reg => {
+        const parent = gastosFixos.find(f => f.id === reg.id_gasto_fixo);
+        if (parent && reg.valor_real > 0) {
+          let pagouNoMes = false;
+          let diaPago = reg.dia_pagamento_real || parent.dia_pagamento_previsto;
+
+          if (reg.data_pagamento_real) {
+            pagouNoMes = reg.data_pagamento_real.substring(0, 7) === mesAno;
+            diaPago = Number(reg.data_pagamento_real.split('-')[2]);
+          } else if (reg.dia_pagamento_real) {
+            pagouNoMes = reg.mes_ano === mesAno;
+          }
+
+          if (pagouNoMes) {
+            let desc = `${parent.nome} (Pago)`;
+            if (reg.mes_ano !== mesAno) {
+              const [ry, rm] = reg.mes_ano.split('-').map(Number);
+              const mesesPt = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+              desc = `${parent.nome} (Pago — Competência ${mesesPt[rm - 1]}/${String(ry).slice(-2)})`;
+            }
+            listMovimentos.push({
+              id: `fixed-${parent.id}-real`,
+              dia: diaPago,
+              descricao: desc,
+              tipo: 'outflow',
+              origem: 'fixo',
+              status: 'pago',
+              valor: Number(reg.valor_real),
+              createdAt: reg.created_at
+            });
+          }
+        }
+      });
+
+      // D. Fatura Cartão de Crédito
       const mesAnoAnterior = getMesAnoAnterior(mesAno);
       const faturaAnterior = comprasParceladas.filter(compra => {
         const p = getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas);
@@ -371,44 +402,26 @@ export function Extrato() {
       const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
       const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;
 
-      if (faturaAnterior > 0) {
-        if (ccPaid && ccDiaPagamentoReal !== null) {
-          listMovimentos.push({
-            id: `fatura-${mesAnoAnterior}-pago`,
-            dia: ccDiaPagamentoReal,
-            descricao: 'Fatura Cartão Mês Anterior (Paga)',
-            tipo: 'outflow',
-            origem: 'fatura',
-            status: 'pago',
-            valor: faturaAnterior
-          });
-        } else {
-          listMovimentos.push({
-            id: `fatura-${mesAnoAnterior}-proj`,
-            dia: 10,
-            descricao: 'Fatura Cartão Mês Anterior (Provisionada)',
-            tipo: 'outflow',
-            origem: 'fatura',
-            status: 'provisionado',
-            valor: faturaAnterior
-          });
-        }
+      if (faturaAnterior > 0 && ccPaid && ccDiaPagamentoReal !== null) {
+        listMovimentos.push({
+          id: `fatura-${mesAnoAnterior}-pago`,
+          dia: ccDiaPagamentoReal,
+          descricao: 'Fatura Cartão Mês Anterior (Paga)',
+          tipo: 'outflow',
+          origem: 'fatura',
+          status: 'pago',
+          valor: faturaAnterior,
+          createdAt: pagoFaturaAnterior!.created_at
+        });
       }
 
-      // D. Gastos Diários
-      const systemDate = new Date();
-      const realTodayDay = systemDate.getDate();
-      const realTodayMonthIso = `${systemDate.getFullYear()}-${String(systemDate.getMonth() + 1).padStart(2, '0')}`;
-
-      // Apenas categorias com limite_mensal > 0 geram provisões
+      // E. Gastos Diários
       const catsComLimite = categoriasDiarias.filter(c => Number(c.limite_mensal) > 0);
 
       for (let d = 1; d <= daysInMonth; d++) {
         const dayStr = `${mesAno}-${String(d).padStart(2, '0')}`;
         const recordsForDay = registrosDiarios.filter(r => r.data === dayStr);
-        const isFutureDay = mesAno > realTodayMonthIso || (mesAno === realTodayMonthIso && d > realTodayDay);
 
-        // 1. Gastos pontuais sem categoria — mostra sempre que valor > 0
         recordsForDay
           .filter(r => r.id_categoria === null)
           .forEach(r => {
@@ -420,18 +433,15 @@ export function Extrato() {
                 tipo: 'outflow',
                 origem: 'diario',
                 status: 'realizado',
-                valor: Number(r.valor_gasto)
+                valor: Number(r.valor_gasto),
+                createdAt: r.created_at
               });
             }
           });
 
-        // 2. Gastos por categoria — cada registro aparece de forma independente
         catsComLimite.forEach(cat => {
-          const limiteDiario = Number(cat.limite_mensal) / 31;
           const regsReal = recordsForDay.filter(r => r.id_categoria === cat.id);
-
           if (regsReal.length > 0) {
-            // Itera cada lançamento real da categoria neste dia de forma independente
             regsReal.forEach(regReal => {
               const valorReal = Number(regReal.valor_gasto);
               if (valorReal > 0) {
@@ -444,28 +454,16 @@ export function Extrato() {
                   tipo: 'outflow',
                   origem: 'diario',
                   status: 'realizado',
-                  valor: valorReal
+                  valor: valorReal,
+                  createdAt: regReal.created_at
                 });
               }
-              // valor=0 (zerado pelo usuário): não aparece
-            });
-          } else if (isFutureDay && limiteDiario > 0) {
-            // Dia futuro sem nenhum registro: mostra projeção do limite diário da categoria
-            listMovimentos.push({
-              id: `daily-proj-${cat.id}-${d}`,
-              dia: d,
-              descricao: `${cat.nome} (Provisão)`,
-              tipo: 'outflow',
-              origem: 'diario',
-              status: 'provisionado',
-              valor: limiteDiario
             });
           }
-          // Dia passado sem registro = não aparece
         });
       }
 
-      // E. Movimentações da Reserva Financeira que afetam a Conta Geral
+      // F. Movimentações da Reserva Financeira que afetam a Conta Geral
       const activeMovsReserva = dbMovsReservaList.filter(mov => {
         const startMonth = mov.data_movimentacao.substring(0, 7);
         if (!mov.projetar) {
@@ -483,10 +481,11 @@ export function Extrato() {
             id: `reserva-${mov.id}-unique`,
             dia: entryDay,
             descricao: mov.tipo === 'entrada' ? `Depósito na Reserva: ${mov.descricao}` : `Resgate da Reserva: ${mov.descricao}`,
-            tipo: mov.tipo === 'entrada' ? 'outflow' : 'inflow', // Depósito é saída, Resgate é entrada na geral
+            tipo: mov.tipo === 'entrada' ? 'outflow' : 'inflow',
             origem: 'reserva',
             status: 'realizado',
-            valor: Number(mov.valor_previsto_base)
+            valor: Number(mov.valor_previsto_base),
+            createdAt: mov.created_at
           });
         } else {
           const reg = dbRegsReservaList.find(r => r.id_movimentacao === mov.id && r.mes_ano === mesAno);
@@ -499,28 +498,22 @@ export function Extrato() {
               tipo: mov.tipo === 'entrada' ? 'outflow' : 'inflow',
               origem: 'reserva',
               status: 'realizado',
-              valor: Number(reg.valor_real)
-            });
-          } else if (mov.ativo) {
-            listMovimentos.push({
-              id: `reserva-${mov.id}-proj`,
-              dia: mov.dia_movimentacao_previsto,
-              descricao: mov.tipo === 'entrada' ? `Depósito na Reserva: ${mov.descricao} (Provisionado)` : `Resgate da Reserva: ${mov.descricao} (Provisionado)`,
-              tipo: mov.tipo === 'entrada' ? 'outflow' : 'inflow',
-              origem: 'reserva',
-              status: 'provisionado',
-              valor: Number(mov.valor_previsto_base)
+              valor: Number(reg.valor_real),
+              createdAt: reg.created_at
             });
           }
         }
       });
 
       // 5. Ordenação Cronológica e Acumulação de Saldo Líquido
-      // Inflow primeiro no mesmo dia para evitar saldos falsamente negativos intermediários
       listMovimentos.sort((a, b) => {
         if (a.dia !== b.dia) return a.dia - b.dia;
-        if (a.tipo !== b.tipo) return a.tipo === 'inflow' ? -1 : 1;
-        return a.id.localeCompare(b.id);
+        // Entradas (inflows) primeiro no mesmo dia
+        if (a.tipo !== b.tipo) {
+          return a.tipo === 'inflow' ? -1 : 1;
+        }
+        // Saídas/entradas na ordem de lançamento
+        return a.createdAt.localeCompare(b.createdAt);
       });
 
       let runningBalance = saldoAcumulado;
@@ -536,7 +529,16 @@ export function Extrato() {
         };
       });
 
-      setMovimentos(sortedMovimentos);
+      // 6. Ordenar para exibição: dias mais recentes primeiro, mas mantendo a ordem (entradas antes de saídas e saídas em ordem de lançamento) no mesmo dia
+      const displayMovimentos = [...sortedMovimentos].sort((a, b) => {
+        if (a.dia !== b.dia) return b.dia - a.dia;
+        if (a.tipo !== b.tipo) {
+          return a.tipo === 'inflow' ? -1 : 1;
+        }
+        return a.createdAt.localeCompare(b.createdAt);
+      });
+
+      setMovimentos(displayMovimentos);
 
     } catch (error) {
       console.error('Erro ao montar extrato consolidado:', error);
@@ -592,11 +594,12 @@ export function Extrato() {
           fontWeight: 600;
           border: 1.5px solid var(--border-color);
         }
-        .origem-entrada { background-color: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #10b981; }
-        .origem-fixo { background-color: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; }
-        .origem-diario { background-color: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3); color: #f59e0b; }
-        .origem-fatura { background-color: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.3); color: #ef4444; }
-        .origem-reserva { background-color: rgba(99, 102, 241, 0.08); border-color: rgba(99, 102, 241, 0.3); color: #6366f1; }
+        .origem-entrada { background-color: rgba(107, 163, 90, 0.08); border-color: rgba(107, 163, 90, 0.3); color: #6BA35A; }
+        .origem-salario { background-color: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; }
+        .origem-fixo { background-color: rgba(232, 102, 89, 0.08); border-color: rgba(232, 102, 89, 0.3); color: #e86659; }
+        .origem-diario { background-color: rgba(255, 154, 63, 0.08); border-color: rgba(255, 154, 63, 0.3); color: #ff9a3f; }
+        .origem-fatura { background-color: rgba(113, 65, 139, 0.08); border-color: rgba(113, 65, 139, 0.3); color: #71418b; }
+        .origem-reserva { background-color: rgba(0, 162, 226, 0.08); border-color: rgba(0, 162, 226, 0.3); color: #00a2e2; }
 
         .status-badge {
           display: inline-flex;
@@ -607,9 +610,9 @@ export function Extrato() {
           font-weight: 700;
           text-transform: uppercase;
         }
-        .status-realizado, .status-pago { background-color: rgba(16, 185, 129, 0.12); color: #10b981; }
+        .status-realizado, .status-pago { background-color: rgba(107, 163, 90, 0.12); color: #6BA35A; }
         .status-provisionado { background-color: rgba(107, 114, 128, 0.12); color: var(--text-muted); }
-        .status-atrasado { background-color: rgba(239, 68, 68, 0.12); color: #ef4444; }
+        .status-atrasado { background-color: rgba(232, 102, 89, 0.12); color: #e86659; }
 
         @media (max-width: 992px) {
           .extrato-header-row { display: none !important; }
@@ -654,9 +657,9 @@ export function Extrato() {
           <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Saldo Inicial do Mês</div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '0.5rem', color: 'var(--text-main)' }}>{formatBRL(saldoInicial)}</div>
         </Card>
-        <Card style={{ padding: '1.25rem', borderLeft: '4px solid #10b981' }}>
+        <Card style={{ padding: '1.25rem', borderLeft: '4px solid #6BA35A' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Total Recebido (Mês)</div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '0.5rem', color: '#10b981' }}>{formatBRL(totalEntradas)}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, marginTop: '0.5rem', color: '#6BA35A' }}>{formatBRL(totalEntradas)}</div>
         </Card>
         <Card style={{ padding: '1.25rem', borderLeft: '4px solid #ef4444' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Total Saídas (Mês)</div>
@@ -668,30 +671,6 @@ export function Extrato() {
         </Card>
       </div>
 
-      {/* Entradas de Competência do Mês Recebidas em Outro Mês */}
-      {entradasCompetenciaOutroMes.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <Card style={{ padding: '1.25rem', borderLeft: '4px solid #10b981', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Entradas deste mês recebidas em outro período (Competência)
-            </h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.25rem' }}>
-              {entradasCompetenciaOutroMes.map(item => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.4rem 0.85rem', backgroundColor: 'rgba(16, 185, 129, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.9rem' }}>{item.descricao}</span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    {item.tipoDesvio === 'antecipado' ? 'Recebida antecipadamente em' : 'Recebida com atraso em'} {item.dataRecebimento}
-                  </span>
-                  <span style={{ fontWeight: 800, color: '#10b981', fontSize: '0.9rem', marginLeft: '0.5rem' }}>
-                    {formatBRL(item.valor)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
       {/* Lista de Movimentos */}
       <Card>
         {isLoading ? (
@@ -700,7 +679,7 @@ export function Extrato() {
             <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>Processando extrato...</span>
           </div>
         ) : movimentos.length === 0 ? (
-          <p className="text-muted" style={{ padding: '1.5rem', margin: 0 }}>Nenhuma movimentação registrada ou provisionada para este mês.</p>
+          <p className="text-muted" style={{ padding: '1.5rem', margin: 0 }}>Nenhuma movimentação registrada para este mês.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {/* Header Columns */}
@@ -732,11 +711,12 @@ export function Extrato() {
                   <div data-label="Origem">
                     <span className={`origem-badge origem-${mov.origem}`}>
                       {mov.origem === 'entrada' && <ArrowUpRight size={12} />}
+                      {mov.origem === 'salario' && <TrendingUp size={12} />}
                       {mov.origem === 'fixo' && <Wallet size={12} />}
                       {mov.origem === 'diario' && <Calendar size={12} />}
                       {mov.origem === 'fatura' && <CreditCard size={12} />}
                       {mov.origem === 'reserva' && <PiggyBank size={12} />}
-                      {mov.origem.toUpperCase()}
+                      {mov.origem === 'salario' ? 'SALÁRIO' : mov.origem.toUpperCase()}
                     </span>
                   </div>
 
@@ -748,7 +728,7 @@ export function Extrato() {
                   </div>
 
                   {/* Valor */}
-                  <div data-label="Valor" style={{ textAlign: 'right', fontWeight: 700, color: isInflow ? '#10b981' : 'var(--text-main)' }}>
+                  <div data-label="Valor" style={{ textAlign: 'right', fontWeight: 700, color: isInflow ? '#6BA35A' : 'var(--text-main)' }}>
                     {isInflow ? '+' : '-'} {formatBRL(mov.valor)}
                   </div>
 

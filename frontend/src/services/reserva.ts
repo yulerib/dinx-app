@@ -187,6 +187,7 @@ export const reservaService = {
           gerar_saldo_devedor: m.tipo === 'saida' && m.gerar_saldo_devedor,
           quitar_saldo_devedor: m.tipo === 'entrada' && m.quitar_saldo_devedor,
           recorrente: false,
+          reposto: m.reposto,
           created_at: m.created_at
         });
       });
@@ -210,6 +211,7 @@ export const reservaService = {
         quitar_saldo_devedor: tipo === 'entrada' && r.quitar_saldo_devedor,
         recorrente: true,
         mes_ano: r.mes_ano,
+        reposto: r.reposto,
         created_at: r.created_at
       });
     });
@@ -221,5 +223,25 @@ export const reservaService = {
     });
 
     return historico;
+  },
+
+  // Zera manualmente as movimentações a repor (marca reposto = true)
+  async resetValoresARepor(): Promise<void> {
+    // 1. Atualizar movimentações pontuais
+    const { error: err1 } = await supabase
+      .from('movimentacoes_reserva')
+      .update({ reposto: true })
+      .eq('projetar', false)
+      .or('gerar_saldo_devedor.eq.true,quitar_saldo_devedor.eq.true');
+
+    if (err1) throw err1;
+
+    // 2. Atualizar registros de recorrentes
+    const { error: err2 } = await supabase
+      .from('registros_movimentacoes_reserva')
+      .update({ reposto: true })
+      .or('gerar_saldo_devedor.eq.true,quitar_saldo_devedor.eq.true');
+
+    if (err2) throw err2;
   }
 };

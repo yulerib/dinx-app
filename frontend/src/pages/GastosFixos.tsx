@@ -11,7 +11,7 @@ import { gastosFixosService } from '../services/gastosFixos';
 import type { GastoFixoMensal } from '../types/database.types';
 
 export function GastosFixos() {
-  const { currentMonth, selectedDay } = useMonth();
+  const { currentMonth } = useMonth();
   const year = currentMonth.getFullYear();
   const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
   const mesAno = `${year}-${month}`;
@@ -34,6 +34,12 @@ export function GastosFixos() {
   const [editValor, setEditValor] = useState(0);
   const [editDiaPagamentoPrevisto, setEditDiaPagamentoPrevisto] = useState<number>(10);
   const [editMode, setEditMode] = useState<'thisMonth' | 'allMonths'>('thisMonth');
+
+  // Pay Modal State
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [gastoToPay, setGastoToPay] = useState<GastoFixoMensal | null>(null);
+  const [payValor, setPayValor] = useState<number>(0);
+  const [payData, setPayData] = useState<string>('');
 
   const fetchGastos = async () => {
     try {
@@ -117,6 +123,83 @@ export function GastosFixos() {
       setGastoToEdit(null);
     } catch (error: any) {
       alert('Falha ao editar: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenPay = (gasto: GastoFixoMensal) => {
+    setGastoToPay(gasto);
+    const previsto = gasto.registro_atual?.valor_previsto_ajustado || gasto.valor_previsto_base;
+    const real = gasto.registro_atual?.valor_real || 0;
+    setPayValor(real > 0 ? real : previsto);
+
+    if (gasto.registro_atual?.data_pagamento_real) {
+      setPayData(gasto.registro_atual.data_pagamento_real);
+    } else {
+      const pDay = gasto.dia_pagamento_previsto || 10;
+      setPayData(`${mesAno}-${String(pDay).padStart(2, '0')}`);
+    }
+    setIsPayModalOpen(true);
+  };
+
+  const handleSavePay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gastoToPay || payValor < 0 || !payData) return;
+
+    try {
+      setIsSubmitting(true);
+      const selectedMonthIso = payData.substring(0, 7);
+      if (selectedMonthIso !== mesAno) {
+        const mesesAbrev = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const mIdxAberto = Number(mesAno.split('-')[1]) - 1;
+        const mIdxSel = Number(selectedMonthIso.split('-')[1]) - 1;
+        const nomeMesAberto = mesesAbrev[mIdxAberto];
+        const nomeMesSel = mesesAbrev[mIdxSel];
+
+        const confirmacao = window.confirm(
+          `Atenção: Você está realizando o pagamento em um dia de outro mês (${nomeMesSel}).\nA contabilidade deste gasto será mantida no mês aberto (${nomeMesAberto}).\n\nDeseja prosseguir?`
+        );
+        if (!confirmacao) return;
+      }
+
+      const diaReal = Number(payData.split('-')[2]);
+      await gastosFixosService.upsertRegistro(
+        gastoToPay.id,
+        mesAno,
+        payValor,
+        gastoToPay.registro_atual?.valor_previsto_ajustado || null,
+        diaReal,
+        payData
+      );
+
+      await fetchGastos();
+      setIsPayModalOpen(false);
+      setGastoToPay(null);
+    } catch (error: any) {
+      alert('Falha ao registrar pagamento: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearPay = async () => {
+    if (!gastoToPay) return;
+    try {
+      setIsSubmitting(true);
+      await gastosFixosService.upsertRegistro(
+        gastoToPay.id,
+        mesAno,
+        0,
+        gastoToPay.registro_atual?.valor_previsto_ajustado || null,
+        null,
+        null
+      );
+      await fetchGastos();
+      setIsPayModalOpen(false);
+      setGastoToPay(null);
+    } catch (error: any) {
+      alert('Falha ao remover pagamento: ' + (error.message || JSON.stringify(error)));
     } finally {
       setIsSubmitting(false);
     }
@@ -265,10 +348,7 @@ export function GastosFixos() {
               <GastoRow 
                 key={gasto.id} 
                 gasto={gasto} 
-                mesAno={mesAno} 
-                currentMonth={currentMonth}
-                selectedDay={selectedDay}
-                onUpdate={fetchGastos} 
+                onPay={() => handleOpenPay(gasto)}
                 onEdit={() => handleOpenEdit(gasto)}
                 onDelete={() => handleDelete(gasto.id)}
               />
@@ -380,6 +460,56 @@ export function GastosFixos() {
         )}
       </Modal>
 
+      {/* Modal Registrar Pagamento */}
+      <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Registrar Pagamento">
+        {gastoToPay && (
+          <form onSubmit={handleSavePay}>
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: 'rgba(99, 102, 241, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Despesa:</span>
+              <strong style={{ marginLeft: '0.5rem', color: 'var(--text-main)' }}>{gastoToPay.nome}</strong>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Valor Projetado: <strong>{formatBRL(gastoToPay.registro_atual?.valor_previsto_ajustado || gastoToPay.valor_previsto_base)}</strong>
+              </div>
+            </div>
+
+            <CurrencyInput 
+              label="Valor Efetivamente Pago"
+              value={payValor}
+              onChange={setPayValor}
+              required
+            />
+
+            <div className="input-group" style={{ marginTop: '1rem' }}>
+              <label>Data Real do Pagamento</label>
+              <input 
+                type="date" 
+                className="input" 
+                value={payData}
+                onChange={e => setPayData(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '1rem' }}>
+              {gastoToPay.registro_atual?.valor_real && gastoToPay.registro_atual.valor_real > 0 ? (
+                <Button type="button" variant="outline" onClick={handleClearPay} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }} disabled={isSubmitting}>
+                  Limpar Pagamento
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button type="button" variant="outline" onClick={() => setIsPayModalOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmitting} style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
+                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+
     </div>
   );
 }
@@ -387,32 +517,20 @@ export function GastosFixos() {
 // -------------------------------------------------------------
 // Componente de Linha (Lógica de Edição de Valor Real e Cores)
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// Componente de Linha (Simplificado para apenas disparar o modal)
+// -------------------------------------------------------------
 function GastoRow({ 
   gasto, 
-  mesAno, 
-  currentMonth,
-  selectedDay,
-  onUpdate, 
+  onPay, 
   onEdit, 
   onDelete 
 }: { 
   gasto: GastoFixoMensal, 
-  mesAno: string, 
-  currentMonth: Date,
-  selectedDay: number,
-  onUpdate: () => void,
-  onEdit: () => void,
+  onPay: () => void, 
+  onEdit: () => void, 
   onDelete: () => void,
 }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [valorReal, setValorReal] = useState(gasto.registro_atual?.valor_real || 0);
-  const [isSaving, setIsSaving] = useState(false);
-  const isSavingRef = React.useRef(false);
-
-  useEffect(() => {
-    setValorReal(gasto.registro_atual?.valor_real || 0);
-  }, [gasto]);
-
   const previstoEfetivo = gasto.registro_atual?.valor_previsto_ajustado || gasto.valor_previsto_base;
   const realPago = gasto.registro_atual?.valor_real || 0;
 
@@ -426,103 +544,49 @@ function GastoRow({
     return 'var(--danger)';
   };
 
-  const handleSave = async (valToSave: number) => {
-    if (isSavingRef.current) return;
-    isSavingRef.current = true;
-    setIsSaving(true);
-    try {
-      const realDayToSave = valToSave > 0 ? selectedDay : null;
-      await gastosFixosService.upsertRegistro(
-        gasto.id, 
-        mesAno, 
-        valToSave, 
-        gasto.registro_atual?.valor_previsto_ajustado || undefined,
-        realDayToSave
-      );
-      setIsEditing(false);
-      onUpdate();
-    } catch (error) {
-      console.error('Erro ao salvar registro:', error);
-    } finally {
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
-  };
-
-  const handleQuickPay = async () => {
-    try {
-      setIsSaving(true);
-      await gastosFixosService.upsertRegistro(
-        gasto.id, 
-        mesAno, 
-        previstoEfetivo, 
-        gasto.registro_atual?.valor_previsto_ajustado || null, 
-        selectedDay
-      );
-      setIsEditing(false);
-      onUpdate();
-    } catch (error) {
-      console.error('Erro ao pagar rápido:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleInputBlur = () => {
-    handleSave(valorReal);
-  };
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSave(valorReal);
-    }
-  };
-
-  const systemDate = new Date();
-  const isCurrentMonth = currentMonth.getFullYear() === systemDate.getFullYear() && currentMonth.getMonth() === systemDate.getMonth();
-  const isPaidToday = isCurrentMonth && (gasto.registro_atual?.dia_pagamento_real === systemDate.getDate());
   const isPaid = realPago > 0;
-
-  let stateClass = 'gasto-row-aberta';
-  if (isPaid) {
-    stateClass = isPaidToday ? 'gasto-row-paga-hoje' : 'gasto-row-ja-paga';
-  }
+  const stateClass = isPaid ? 'gasto-row-ja-paga' : 'gasto-row-aberta';
 
   return (
     <TransactionListItem 
       type="fixed"
       className={stateClass}
-      isEditing={isEditing}
       title={
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 600 }}>{gasto.nome}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
             Dia previsto: {gasto.dia_pagamento_previsto || '-'}
-            {gasto.registro_atual?.dia_pagamento_real && ` • Pago no dia: ${gasto.registro_atual.dia_pagamento_real}`}
+            {gasto.registro_atual?.data_pagamento_real ? (
+              ` • Pago em: ${gasto.registro_atual.data_pagamento_real.split('-').reverse().join('/')}`
+            ) : gasto.registro_atual?.dia_pagamento_real ? (
+              ` • Pago no dia: ${gasto.registro_atual.dia_pagamento_real}`
+            ) : null}
           </span>
         </div>
       }
       value1={formatBRL(previstoEfetivo)}
       value2={
-        isEditing ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end', width: '100%' }}>
-            <CurrencyInput 
-              value={valorReal} 
-              onChange={setValorReal} 
-              autoFocus
-              onBlur={handleInputBlur}
-              onKeyDown={handleInputKeyDown}
-              disabled={isSaving}
-              style={{ width: '85px', padding: '0.4rem 0.25rem', fontSize: '0.875rem', marginBottom: 0, height: '36px' }}
-            />
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault(); // Evita blur do input antes do click!
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          {isPaid ? (
+            <div 
+              onClick={onPay}
+              style={{ 
+                cursor: 'pointer', 
+                padding: '0.4rem 0.5rem',
+                borderRadius: 'var(--radius-md)',
+                border: '1px dashed var(--border-color)',
+                color: getStatusColor(),
+                fontWeight: 600
               }}
-              onClick={handleQuickPay}
-              disabled={isSaving}
+              title="Clique para alterar o pagamento"
+            >
+              {formatBRL(realPago)}
+            </div>
+          ) : (
+            <button
+              onClick={onPay}
               style={{
-                padding: '0.4rem 0.6rem',
+                padding: '0.35rem 0.65rem',
                 backgroundColor: 'rgba(16, 185, 129, 0.15)',
                 border: '1.5px solid var(--success)',
                 color: 'var(--success)',
@@ -530,7 +594,6 @@ function GastoRow({
                 fontSize: '0.75rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                height: '36px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.25rem',
@@ -544,65 +607,12 @@ function GastoRow({
                 e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
                 e.currentTarget.style.color = 'var(--success)';
               }}
-              title="Pagar com o valor projetado"
+              title="Registrar pagamento"
             >
-              <Check size={12} /> Pagar Cheio
+              <Check size={12} /> Pagar
             </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
-            <div 
-              onClick={() => setIsEditing(true)}
-              style={{ 
-                cursor: 'pointer', 
-                padding: '0.4rem 0.5rem',
-                borderRadius: 'var(--radius-md)',
-                border: '1px dashed transparent',
-                color: getStatusColor(),
-                fontWeight: realPago > 0 ? 600 : 400
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
-              title="Clique para informar o valor pago manualmente"
-            >
-              {realPago > 0 ? formatBRL(realPago) : 'Informar Pago'}
-            </div>
-            
-            {realPago === 0 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleQuickPay();
-                }}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                  border: '1.5px solid var(--success)',
-                  color: 'var(--success)',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--success)';
-                  e.currentTarget.style.color = '#fff';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
-                  e.currentTarget.style.color = 'var(--success)';
-                }}
-                title="Pagar com o valor projetado"
-              >
-                <Check size={12} /> Pagar
-              </button>
-            )}
-          </div>
-        )
+          )}
+        </div>
       }
       actions={
         <>

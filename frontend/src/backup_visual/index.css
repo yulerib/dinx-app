@@ -1,0 +1,724 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+:root {
+  /* Transições micro-animações (cubic-bezier) */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Sombras físicas retrô */
+  --shadow-sm: 0 2px 0px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 0px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.3);
+  
+  /* Raios de borda (amigáveis e arredondados) */
+  --radius-sm: 8px;
+  --radius-md: 20px;   /* Pill */
+  --radius-lg: 25px;
+  --radius-xl: 30px;
+
+  /* Cores Temáticas de Seções */
+  --color-main: #f5d916;     /* Dashboard / Geral (Amarelo) */
+  --color-fixos: #e86659;    /* Gastos Fixos (Soft Red-Orange) */
+  --color-diarios: #ff9a3f;  /* Gastos Diários (Orange) */
+  --color-parcelas: #71418b; /* Compras Parceladas (Purple) */
+  --color-entradas: #6BA35A; /* Entradas & Créditos (Green) */
+  --color-reserva: #00a2e2;  /* Reserva Financeira (Light Blue) */
+  --color-extrato: #f5d916;  /* Extrato (Amarelo) */
+}
+
+/* --- TEMA ESCURO (CHUMBO) --- */
+[data-theme='dark'] {
+  --bg-main: #1A1A1A;      /* Cinza fosco plano */
+  --bg-card: rgba(13, 13, 13, 0.85); /* 10% mais escuro que o fundo, glassmorphism */
+  --text-main: #F1F5F9;    /* Off-white */
+  --text-muted: #94A3B8;   /* Slate 400 */
+  --border-color: rgba(245, 217, 22, 0.18); /* Borda amarela opaca */
+  
+  --primary: var(--color-main);
+  --primary-hover: #ded010;
+  
+  --success: #6BA35A;
+  --danger: #e86659;
+  --warning: #ff9a3f;
+
+  --shadow-glow: 0 0 15px rgba(245, 217, 22, 0.12);
+  --bg-input: rgba(26, 26, 26, 0.85);
+
+  /* Mapeamento de variáveis legadas / específicas de observações e layout */
+  --color-primary: var(--primary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-bg-card: var(--bg-card);
+  --color-text-main: var(--text-main);
+  --color-bg-body: var(--bg-main);
+}
+
+/* --- TEMA CLARO (CANARY YELLOW) --- */
+[data-theme='light'] {
+  --bg-main: #F8F3E0;      /* Marfim quente fosco */
+  --bg-card: rgba(252, 250, 242, 0.9); /* Marfim claro */
+  --text-main: #1E293B;    /* Chumbo escuro para contraste */
+  --text-muted: #64748B;   /* Slate 500 */
+  --border-color: rgba(245, 217, 22, 0.45); /* Borda amarela visível */
+  
+  --primary: #d8be0c;      /* Amarelo ligeiramente mais escuro para contraste no texto */
+  --primary-hover: #bda60a;
+  
+  --success: #6BA35A;
+  --danger: #e86659;
+  --warning: #ff9a3f;
+
+  --shadow-glow: 0 0 15px rgba(245, 217, 22, 0.08);
+  --bg-input: rgba(255, 255, 255, 0.95);
+
+  /* Mapeamento de variáveis legadas / específicas de observações e layout */
+  --color-primary: var(--primary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-bg-card: var(--bg-card);
+  --color-text-main: var(--text-main);
+  --color-bg-body: var(--bg-main);
+}
+
+/* --- ADAPTAÇÕES ESPECÍFICAS DE SEÇÕES --- */
+.theme-fixos {
+  --primary: var(--color-fixos);
+  --primary-hover: #cf5d50;
+  --border-color: rgba(232, 102, 89, 0.25);
+}
+[data-theme='light'] .theme-fixos {
+  --border-color: rgba(232, 102, 89, 0.45);
+}
+
+.theme-diarios {
+  --primary: var(--color-diarios);
+  --primary-hover: #e0832f;
+  --border-color: rgba(255, 154, 63, 0.25);
+}
+[data-theme='light'] .theme-diarios {
+  --border-color: rgba(255, 154, 63, 0.45);
+}
+
+.theme-parcelas {
+  --primary: var(--color-parcelas);
+  --primary-hover: #5d3473;
+  --border-color: rgba(113, 65, 139, 0.25);
+}
+[data-theme='light'] .theme-parcelas {
+  --border-color: rgba(113, 65, 139, 0.45);
+}
+
+.theme-entradas {
+  --primary: var(--color-entradas);
+  --primary-hover: #568248;
+  --border-color: rgba(107, 163, 90, 0.25);
+}
+[data-theme='light'] .theme-entradas {
+  --border-color: rgba(107, 163, 90, 0.45);
+}
+
+.theme-reserva {
+  --primary: var(--color-reserva);
+  --primary-hover: #0087bd;
+  --border-color: rgba(0, 162, 226, 0.25);
+}
+[data-theme='light'] .theme-reserva {
+  --border-color: rgba(0, 162, 226, 0.45);
+}
+
+.theme-extrato {
+  --primary: var(--color-extrato);
+  --primary-hover: #ded010;
+  --border-color: rgba(245, 217, 22, 0.25);
+}
+[data-theme='light'] .theme-extrato {
+  --border-color: rgba(245, 217, 22, 0.45);
+}
+
+/* Reset Básico */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Space Mono', monospace;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  line-height: 1.5;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Layout Geral */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.card {
+  background-color: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid var(--border-color); /* Bordas um pouco mais robustas/retrô */
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.modal-card {
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-glow), var(--shadow-md);
+  border-color: var(--primary);
+}
+
+/* Botões */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: 50px; /* Completamente redondo/pílula */
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+  will-change: transform;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:active {
+  transform: translateY(2px) scale(0.97);
+  box-shadow: none !important;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: #161F2E; /* Chumbo escuro para alto contraste no amarelo */
+  border-color: var(--primary);
+}
+
+/* Contraste Fino de Botões Primários por Seção/Componente */
+.theme-fixos .btn-primary,
+.theme-diarios .btn-primary,
+.theme-parcelas .btn-primary,
+.theme-entradas .btn-primary,
+.theme-reserva .btn-primary {
+  color: #ffffff !important;
+}
+
+.theme-dashboard .btn-primary,
+.theme-extrato .btn-primary {
+  color: #161F2E !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-outline {
+  border: 2px solid var(--border-color);
+  background-color: transparent;
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-card);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-danger {
+  background-color: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.btn-danger:hover {
+  background-color: #c53030;
+  border-color: #c53030;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Pequenos botões redondos de ícones para ações (Visual mais simpático) */
+button[title="Editar Despesa"],
+button[title="Excluir Despesa"],
+button[title="Editar Categoria"],
+button[title="Excluir Categoria"],
+button[title="Adicionar / Ver"],
+button[title="Zerar"],
+button[title="Editar Lançamento"],
+button[title="Excluir Lançamento"],
+button[title="Editar Compra"],
+button[title="Excluir Compra"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  border: 1px solid transparent !important;
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  transition: all var(--transition-fast) !important;
+}
+
+[data-theme='light'] button[title] {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Modificações estéticas individuais nos botões redondos de ação */
+button[title*="Editar"]:hover {
+  background-color: rgba(0, 127, 255, 0.15) !important;
+  color: #007FFF !important;
+  border-color: rgba(0, 127, 255, 0.3) !important;
+}
+button[title*="Excluir"]:hover,
+button[title*="Apagar"]:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+button[title="Zerar"]:hover {
+  background-color: rgba(127, 255, 0, 0.15) !important;
+  color: var(--primary) !important;
+  border-color: rgba(127, 255, 0, 0.3) !important;
+}
+button[title="Adicionar / Ver"]:hover {
+  background-color: rgba(0, 127, 255, 0.15) !important;
+  color: #007FFF !important;
+  border-color: rgba(0, 127, 255, 0.3) !important;
+}
+
+/* Inputs e Forms */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.input-group label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md); /* Redondo retrô */
+  border: 2px solid var(--border-color);
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: all var(--transition-normal);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(127, 255, 0, 0.18);
+}
+
+/* Tipografia Utilitária */
+.text-h1 { font-size: 1.85rem; font-weight: 700; margin-bottom: 1.5rem; letter-spacing: -0.025em; }
+.text-h2 { font-size: 1.45rem; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.025em; }
+.text-h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.75rem; }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+
+/* Responsividade Mobile (Botões) */
+@media (max-width: 768px) {
+  /* Apenas recolhe o texto se o botão de fato possuir um ícone via prop 'icon'
+     e não for configurado como bloco de largura total */
+  .btn:has(.btn-icon):not([style*="width: 100%"]):not([style*="width:100%"]) .btn-text {
+    display: none;
+  }
+  .btn:has(.btn-icon):not([style*="width: 100%"]):not([style*="width:100%"]) {
+    padding: 0.625rem; /* Formato circular com ícone */
+    border-radius: 50%;
+    width: auto !important; /* Evita que estique */
+    aspect-ratio: 1; /* Garante forma perfeitamente circular */
+  }
+}
+
+/* Resumo Consolidado por Categoria (Gastos Diários) */
+.consolidated-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1.1fr 1.3fr 1fr;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.cr-details {
+  display: contents; /* Permite que os filhos participem do grid pai diretamente */
+}
+
+.cr-detail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.cr-label {
+  display: none; /* Oculta o rótulo no desktop */
+}
+
+.cr-title {
+  font-weight: 700;
+}
+
+/* Responsividade do Consolidado por Categoria no Mobile */
+@media (max-width: 768px) {
+  .table-header-consolidado {
+    display: none !important;
+  }
+
+  .consolidated-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem 1rem !important;
+    background-color: rgba(30, 36, 33, 0.4);
+    margin-bottom: 0.75rem;
+    border: 2px solid var(--border-color) !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  [data-theme='light'] .consolidated-row {
+    background-color: rgba(255, 255, 243, 0.6);
+  }
+
+  .cr-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .cr-details {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    width: 100%;
+  }
+
+  [data-theme='light'] .cr-details {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .cr-detail-item {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100%;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.35rem;
+  }
+
+  [data-theme='light'] .cr-detail-item {
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  }
+
+  .cr-detail-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .cr-label {
+    display: inline !important;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .cr-value {
+    text-align: right;
+    font-size: 0.95rem;
+  }
+}
+
+/* --- COLORIZAÇÃO DOS ELEMENTOS & CABEÇALHOS POR ABA --- */
+.theme-dashboard h1 {
+  color: var(--color-main) !important;
+}
+[data-theme='light'] .theme-dashboard h1 {
+  color: var(--text-main) !important;
+}
+.theme-fixos h1 {
+  color: var(--color-fixos) !important;
+}
+.theme-diarios h1 {
+  color: var(--color-diarios) !important;
+}
+.theme-parcelas h1 {
+  color: var(--color-parcelas) !important;
+}
+.theme-reserva h1 {
+  color: var(--color-reserva) !important;
+}
+
+/* --- ESTILIZAÇÃO E CONTRASTE DOS STATCARDS (VISÃO GERAL) --- */
+/* Estilo ocioso (Fundo levemente colorido por seção) */
+.theme-fixos.card {
+  background-color: rgba(34, 139, 34, 0.08) !important;
+  border-color: rgba(34, 139, 34, 0.3) !important;
+}
+.theme-diarios.card {
+  background-color: rgba(0, 127, 255, 0.08) !important;
+  border-color: rgba(0, 127, 255, 0.3) !important;
+}
+.theme-parcelas.card {
+  background-color: rgba(157, 65, 255, 0.08) !important;
+  border-color: rgba(157, 65, 255, 0.3) !important;
+}
+.theme-reserva.card {
+  background-color: rgba(220, 38, 38, 0.08) !important;
+  border-color: rgba(220, 38, 38, 0.3) !important;
+}
+
+/* Efeito de preenchimento 100% no hover com transição e alto contraste */
+.theme-fixos.card,
+.theme-diarios.card,
+.theme-parcelas.card,
+.theme-reserva.card {
+  transition: background-color var(--transition-normal), border-color var(--transition-normal), transform var(--transition-fast) !important;
+}
+
+.theme-fixos.card:hover {
+  background-color: var(--color-fixos) !important;
+  border-color: var(--color-fixos) !important;
+}
+.theme-diarios.card:hover {
+  background-color: var(--color-diarios) !important;
+  border-color: var(--color-diarios) !important;
+}
+.theme-parcelas.card:hover {
+  background-color: var(--color-parcelas) !important;
+  border-color: var(--color-parcelas) !important;
+}
+.theme-reserva.card:hover {
+  background-color: var(--color-reserva) !important;
+  border-color: var(--color-reserva) !important;
+}
+
+/* Forçar contraste de fontes no hover de StatCards */
+.theme-fixos.card:hover,
+.theme-diarios.card:hover,
+.theme-parcelas.card:hover,
+.theme-reserva.card:hover {
+  color: #ffffff !important;
+}
+.theme-fixos.card:hover *,
+.theme-diarios.card:hover *,
+.theme-parcelas.card:hover *,
+.theme-reserva.card:hover * {
+  color: #ffffff !important;
+}
+.theme-fixos.card:hover .text-muted,
+.theme-diarios.card:hover .text-muted,
+.theme-parcelas.card:hover .text-muted,
+.theme-reserva.card:hover .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+.theme-fixos.card:hover svg,
+.theme-diarios.card:hover svg,
+.theme-parcelas.card:hover svg,
+.theme-reserva.card:hover svg {
+  stroke: #ffffff !important;
+}
+
+/* --- ESTILIZAÇÃO E CONTRASTE DOS BOXES PRINCIPAIS DE RESUMO --- */
+/* Resumo Geral (Chartreuse) */
+.summary-card-geral {
+  background-color: var(--color-main) !important;
+  border-color: var(--color-main) !important; /* Sem outline preto */
+  color: #141816 !important;
+}
+.summary-card-geral * {
+  color: #141816 !important;
+}
+.summary-card-geral .text-muted {
+  color: rgba(20, 24, 22, 0.7) !important;
+}
+/* Barra de progresso interna do Resumo Geral */
+.summary-card-geral div[style*="height: 6px"] {
+  background-color: rgba(20, 24, 22, 0.15) !important;
+  border-color: rgba(20, 24, 22, 0.25) !important;
+}
+.summary-card-geral div[style*="height: 100%"] {
+  background-color: #141816 !important;
+}
+
+/* Resumos de Seções (Preenchimento 100% Sólido) */
+.summary-card-fixos {
+  background-color: var(--color-fixos) !important;
+  border-color: var(--color-fixos) !important;
+  color: #ffffff !important;
+}
+.summary-card-fixos * {
+  color: #ffffff !important;
+}
+.summary-card-fixos .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.summary-card-diarios {
+  background-color: var(--color-diarios) !important;
+  border-color: var(--color-diarios) !important;
+  color: #ffffff !important;
+}
+.summary-card-diarios * {
+  color: #ffffff !important;
+}
+.summary-card-diarios .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.summary-card-parcelas {
+  background-color: var(--color-parcelas) !important;
+  border-color: var(--color-parcelas) !important;
+  color: #ffffff !important;
+}
+.summary-card-parcelas * {
+  color: #ffffff !important;
+}
+.summary-card-parcelas .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.summary-card-entradas {
+  background-color: var(--color-entradas) !important;
+  border-color: var(--color-entradas) !important;
+  color: #ffffff !important;
+}
+.summary-card-entradas * {
+  color: #ffffff !important;
+}
+.summary-card-entradas .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.summary-card-reserva {
+  background-color: var(--color-reserva) !important;
+  border-color: var(--color-reserva) !important;
+  color: #ffffff !important;
+}
+.summary-card-reserva * {
+  color: #ffffff !important;
+}
+.summary-card-reserva .text-muted {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Barras de progresso e desvio internas dos resumos de seções */
+.summary-card-fixos div[style*="height: 6px"],
+.summary-card-diarios div[style*="height: 6px"],
+.summary-card-parcelas div[style*="height: 6px"],
+.summary-card-entradas div[style*="height: 6px"],
+.summary-card-reserva div[style*="height: 6px"],
+.summary-card-diarios div[style*="height: 8px"] {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+.summary-card-fixos div[style*="height: 100%"],
+.summary-card-diarios div[style*="height: 100%"],
+.summary-card-parcelas div[style*="height: 100%"],
+.summary-card-entradas div[style*="height: 100%"],
+.summary-card-reserva div[style*="height: 100%"] {
+  background-color: #ffffff !important;
+}
+
+/* Estilo do desvio diário (BalanceProgressBar) na aba diários */
+.summary-card-diarios div[style*="width: 2px"] {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}
+.summary-card-diarios div[style*="position: absolute"][style*="background-color"] {
+  background-color: #ffffff !important;
+}
+
+/* --- REGRAS PARA ESTOURO DE ORÇAMENTO (IS-OVERBUDGET) --- */
+/* Forçar barra de progresso interna a ficar vermelha quando estourada */
+.summary-card-geral.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+.summary-card-fixos.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+.summary-card-diarios.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+.summary-card-parcelas.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+.summary-card-entradas.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+.summary-card-reserva.is-overbudget div[style*="height: 100%"] {
+  background-color: var(--danger) !important;
+}
+
+/* Barra do desvio diário (BalanceProgressBar) fica vermelha quando estourada */
+.summary-card-diarios.is-overbudget div[style*="position: absolute"][style*="background-color"] {
+  background-color: var(--danger) !important;
+}
+
+/* Tooltip Popup global overrides */
+.warning-tooltip-popup {
+  color: var(--text-main) !important;
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+}
+.warning-tooltip-popup * {
+  color: var(--text-main) !important;
+}
+
+/* Force Warning Icons to keep warning color inside themed cards */
+svg[stroke="var(--warning)"],
+.warning-tooltip-popup svg {
+  stroke: var(--warning) !important;
+}
+
+
+

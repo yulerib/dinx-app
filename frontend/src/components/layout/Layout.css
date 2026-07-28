@@ -1,121 +1,463 @@
+/* Layout Styling - Material Design 3 Redesign */
+
+/* ========================================================
+   1. DESKTOP NAVEGATION DRAWER (SIDEBAR)
+   ======================================================== */
 .sidebar {
-  width: 260px;
-  background-color: var(--bg-card);
-  border-right: 1px solid var(--border-color);
+  width: 280px; /* MD3 Drawer Standard Width */
+  background-color: var(--md-sys-color-surface);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
+  transition: background-color var(--transition-normal), border-color var(--transition-normal);
 }
 
 .sidebar-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  background-color: transparent;
+  padding: 2.5rem 1.5rem 1.5rem 1.5rem; /* Mais espaçado verticalmente */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .sidebar-header h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: -0.025em;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: -0.01em;
+}
+
+.sidebar-header .text-muted {
+  font-size: 0.85rem;
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .sidebar-nav {
-  padding: 1rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
+/* Links do Drawer (Estilo M3 Drawer Item) */
 .nav-link {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
+  height: 56px; /* Altura M3 */
+  padding: 0 1.5rem;
+  border-radius: 100px; /* Pílula completa */
+  color: var(--md-sys-color-on-surface-variant);
   font-weight: 500;
-  transition: all var(--transition-normal);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: background-color var(--transition-fast), 
+              color var(--transition-fast), 
+              font-weight var(--transition-fast);
 }
 
 .nav-link:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-  color: var(--text-main);
-  transform: translateX(4px);
+  background-color: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface);
 }
 
 .nav-link:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 
 .nav-link.active {
-  background-color: var(--primary);
-  color: #141816 !important;
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container) !important;
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(127, 255, 0, 0.25);
+  box-shadow: none; /* Sem sombras no item de menu M3 */
 }
 
-/* Responsividade Básica (Mobile) */
+/* Indicador sutil de ícone no link ativo */
+.nav-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast);
+}
+
+/* Alinhamento à esquerda do ícone com respectivo texto no menu lateral */
+.sidebar .nav-link {
+  justify-content: flex-start;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 0.75rem;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  display: flex;
+  flex-direction: column;
+}
+
+.logout-btn {
+  border: none !important;
+  background: none !important;
+  width: 100% !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 56px;
+  padding: 0 1.5rem;
+  border-radius: 100px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  justify-content: flex-start;
+}
+
+.logout-btn:hover {
+  background-color: var(--md-sys-color-surface-variant) !important;
+  color: var(--md-sys-color-on-surface) !important;
+}
+
+/* ========================================================
+   2. APP HEADER & LAYOUT GERAL
+   ======================================================== */
+.app-header {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  gap: 0.75rem; 
+  margin-bottom: 2rem; 
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.header-mobile-brand {
+  display: none; /* Apenas visível no mobile */
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto; /* Alinha para a direita no desktop */
+  flex-wrap: wrap;
+}
+
+/* Botão Sair Desktop */
+.btn-logout-desktop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 100px;
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.8rem;
+  height: 40px;
+  transition: all var(--transition-fast);
+}
+
+.btn-logout-desktop:hover {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+  border-color: var(--md-sys-color-error);
+}
+
+/* ========================================================
+   3. MOBILE BOTTOM NAVIGATION BAR & BOTTOM SHEET
+   ======================================================== */
+.m3-bottom-nav {
+  display: none; /* Oculto no desktop */
+}
+
+.bottom-sheet-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.bottom-sheet-scrim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+  pointer-events: none;
+}
+
+.bottom-sheet-wrapper.open {
+  pointer-events: auto;
+}
+
+.bottom-sheet-wrapper.open .bottom-sheet-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.bottom-sheet-content {
+  position: relative;
+  background-color: var(--md-sys-color-surface);
+  border-radius: 28px 28px 0 0; /* Cantos arredondados M3 no topo */
+  box-shadow: var(--md-elevation-5);
+  padding: 0 1rem 2.5rem 1rem;
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform var(--transition-normal) var(--md-motion-easing-emphasized);
+  z-index: 1001;
+}
+
+.bottom-sheet-wrapper.open .bottom-sheet-content {
+  transform: translateY(0);
+}
+
+.bottom-sheet-drag-handle {
+  width: 32px;
+  height: 4px;
+  background-color: var(--md-sys-color-outline-variant);
+  border-radius: 100px;
+  margin: 12px auto;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.5rem 1rem 0.5rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.bottom-sheet-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+}
+
+.bottom-sheet-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+}
+
+.bottom-sheet-close-btn:hover {
+  background-color: var(--md-sys-color-surface-variant);
+}
+
+.bottom-sheet-menu-list {
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+}
+
+.bottom-sheet-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 56px;
+  padding: 0 1.25rem;
+  border-radius: 100px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.bottom-sheet-menu-item:hover,
+.bottom-sheet-menu-item:focus {
+  background-color: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface);
+}
+
+.bottom-sheet-menu-item.active {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container) !important;
+  font-weight: 700;
+}
+
+.bottom-sheet-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-sheet-logout {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--md-sys-color-outline-variant);
+  border-radius: 0;
+  padding-top: 1.5rem;
+  height: auto;
+  color: var(--md-sys-color-error);
+}
+
+.bottom-sheet-logout:hover {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container) !important;
+  border-radius: 100px;
+}
+
+/* ========================================================
+   4. RESPONSIVIDADE MOBILE
+   ======================================================== */
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
-    padding-bottom: 90px; /* Espaço para a ilha não sobrepor o conteúdo */
+    padding-bottom: 88px; /* Espaço para a Bottom Nav Bar */
   }
-  
+
   .sidebar {
-    width: 100%;
-    border-right: none;
-    background: transparent;
+    display: none; /* Drawer lateral some no mobile */
   }
-  
-  .sidebar-header {
-    background-color: rgba(5, 11, 8, 0.85); /* Glassmorphism no header */
+
+  .app-header {
+    background-color: rgba(var(--md-sys-color-surface), 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    padding: 1rem 1.25rem;
     position: sticky;
     top: 0;
     z-index: 40;
+    margin-bottom: 1.5rem;
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 1rem 0.5rem !important;
+    align-items: center !important;
+  }
+
+  .header-mobile-brand {
+    display: block;
+    grid-column: 1;
+    grid-row: 1;
   }
   
-  .sidebar-nav {
-    position: fixed;
-    bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    flex-direction: row;
-    background-color: rgba(14, 25, 20, 0.85); /* Glassmorphism forte */
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    border-radius: 30px; /* Bem redondo estilo pílula */
-    padding: 0.5rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px -3px rgba(16, 185, 129, 0.1);
-    z-index: 50;
+  .header-mobile-brand h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .header-controls {
+    display: contents !important;
+  }
+
+  .theme-toggle-container {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .month-selector-container {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+    display: flex;
     justify-content: center;
-    gap: 0.5rem;
-    width: max-content;
-    max-width: 95%;
+    width: 100%;
   }
-  
-  .nav-link {
-    padding: 0.75rem;
-    border-radius: 50%; /* Ícones circulares no mobile */
-    transition: all var(--transition-normal);
+
+  .month-selector-container .month-selector {
+    width: 100% !important;
+    max-width: 320px;
+    justify-content: space-between;
   }
-  
-  .nav-link:hover {
-    transform: translateY(-2px);
+
+  .btn-logout-desktop {
+    display: none; /* Substituído pelo logout do Bottom Sheet */
   }
-  
-  .nav-link span {
-    display: none; /* Esconde o texto no mobile */
+
+  /* --- BOTTOM NAVIGATION BAR SHOW --- */
+  .m3-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background-color: var(--md-sys-color-surface);
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 0.5rem;
+    z-index: 900;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
   }
-  
-  .nav-link.active {
-    background-color: var(--primary);
-    color: var(--bg-main);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-    transform: translateY(-4px); /* Pula levemente ao estar ativo */
+
+  .m3-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 100%;
+    color: var(--md-sys-color-on-surface-variant);
+    text-decoration: none;
+    cursor: pointer;
+    background: none;
+    border: none;
+  }
+
+  /* Container do ícone que ganha a pílula ativa */
+  .m3-bottom-nav-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 32px;
+    border-radius: 16px; /* Pill */
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  .m3-bottom-nav-item:hover .m3-bottom-nav-icon-container {
+    background-color: rgba(var(--md-sys-color-on-surface-variant), 0.08);
+  }
+
+  .m3-bottom-nav-item.active .m3-bottom-nav-icon-container {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+  }
+
+  .m3-bottom-nav-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-align: center;
+    transition: color var(--transition-fast), font-weight var(--transition-fast);
+  }
+
+  .m3-bottom-nav-item.active .m3-bottom-nav-label {
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
   }
 }

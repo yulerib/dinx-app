@@ -1,37 +1,44 @@
-
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CalendarDays, CreditCard, Bot, ArrowUpRight, ChevronLeft, ChevronRight, Calendar, FileText, LogOut, PiggyBank } from 'lucide-react';
+import { LayoutDashboard, Wallet, CalendarDays, CreditCard, Bot, ArrowUpRight, FileText, LogOut, PiggyBank, StickyNote, MoreHorizontal, X } from 'lucide-react';
 import { MonthSelector } from '../ui/MonthSelector';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { GapCheckerModal } from '../ui/GapCheckerModal';
-import { useMonth } from '../../contexts/MonthContext';
+import { M3Icon } from '../ui/M3Icon';
 import { supabase } from '../../lib/supabase';
 import './Layout.css';
 
 export function Layout() {
-  const { selectedDay, nextDay, prevDay, goToToday } = useMonth();
+  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
   const navItems = [
-    { to: '/', label: 'Visão Geral', icon: <LayoutDashboard size={20} /> },
-    { to: '/entradas', label: 'Entradas', icon: <ArrowUpRight size={20} /> },
-    { to: '/fixos', label: 'Gastos Fixos', icon: <Wallet size={20} /> },
-    { to: '/diarios', label: 'Gastos Diários', icon: <CalendarDays size={20} /> },
-    { to: '/cartao-credito', label: 'Cartão de Crédito', icon: <CreditCard size={20} /> },
-    { to: '/extrato', label: 'Extrato', icon: <FileText size={20} /> },
-    { to: '/reserva', label: 'Reserva', icon: <PiggyBank size={20} /> },
-    { to: '/assistente', label: 'Assistente', icon: <Bot size={20} /> },
+    { to: '/', label: 'Visão Geral', icon: <M3Icon name="dashboard" lucideIcon={<LayoutDashboard size={20} />} /> },
+    { to: '/entradas', label: 'Entradas', icon: <M3Icon name="north_east" lucideIcon={<ArrowUpRight size={20} />} /> },
+    { to: '/fixos', label: 'Gastos Fixos', icon: <M3Icon name="account_balance_wallet" lucideIcon={<Wallet size={20} />} /> },
+    { to: '/diarios', label: 'Gastos Diários', icon: <M3Icon name="calendar_today" lucideIcon={<CalendarDays size={20} />} /> },
+    { to: '/cartao-credito', label: 'Cartão de Crédito', icon: <M3Icon name="credit_card" lucideIcon={<CreditCard size={20} />} /> },
+    { to: '/extrato', label: 'Extrato', icon: <M3Icon name="receipt_long" lucideIcon={<FileText size={20} />} /> },
+    { to: '/reserva', label: 'Reserva', icon: <M3Icon name="savings" lucideIcon={<PiggyBank size={20} />} /> },
+    { to: '/observacoes', label: 'Observações', icon: <M3Icon name="sticky_note" lucideIcon={<StickyNote size={20} />} /> },
+    { to: '/assistente', label: 'Assistente', icon: <M3Icon name="smart_toy" lucideIcon={<Bot size={20} />} /> },
   ];
+
+  // Itens principais para a Bottom Nav Bar (Máximo 4)
+  const primaryNavItems = navItems.slice(0, 4);
+  // Itens adicionais que irão para a Bottom Sheet no celular
+  const secondaryNavItems = navItems.slice(4);
 
   return (
     <div className="app-container">
+      {/* Sidebar Desktop (Navigation Drawer M3) */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h2>Dashboard</h2>
-          <p className="text-muted" style={{ fontSize: '0.875rem' }}>Casa & Finanças</p>
+          <h2>Dinx App</h2>
+          <p className="text-muted" style={{ fontSize: '0.85rem' }}>Controle financeiro</p>
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item) => (
@@ -40,98 +47,119 @@ export function Layout() {
               to={item.to}
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <div className="nav-icon-wrapper">{item.icon}</div>
+              <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <button
+            onClick={handleLogout}
+            className="nav-link logout-btn"
+            title="Sair"
+            style={{ border: 'none', background: 'none', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+          >
+            <div className="nav-icon-wrapper">
+              <LogOut size={20} />
+            </div>
+            <span className="nav-label">Sair</span>
+          </button>
+        </div>
       </aside>
       
       <main className="main-content">
-        <header style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-          <ThemeToggle />
-
-          {/* Botão Hoje */}
-          <button 
-            onClick={goToToday}
-            style={{
-              alignItems: 'center',
-              gap: '0.4rem',
-              backgroundColor: '#10b981',
-              color: '#fff',
-              border: '2px solid #141816',
-              borderRadius: '50px',
-              padding: '0.45rem 1.1rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: 'var(--shadow-sm)',
-              fontSize: '0.875rem',
-              height: '40px',
-              transition: 'all 0.2s',
-              display: 'inline-flex'
-            }}
-          >
-            <Calendar size={16} />
-            <span>Hoje</span>
-          </button>
-
-          {/* Seletor de Dia Global */}
-          <div 
-            className="global-day-selector"
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.75rem', 
-              backgroundColor: 'var(--color-main)', 
-              padding: '0.35rem 0.85rem', 
-              borderRadius: '50px', 
-              border: '2px solid #141816', 
-              boxShadow: 'var(--shadow-sm)',
-              color: '#141816',
-              height: '40px'
-            }}
-          >
-            <button onClick={prevDay} style={{ padding: '0.2rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span style={{ fontWeight: 700, minWidth: '55px', textAlign: 'center', color: '#141816', fontSize: '0.9rem' }}>Dia {String(selectedDay).padStart(2, '0')}</span>
-            <button onClick={nextDay} style={{ padding: '0.2rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+        {/* Header Superior */}
+        <header className="app-header">
+          <div className="header-mobile-brand">
+            <h2>Dashboard</h2>
+            <p className="text-muted" style={{ fontSize: '0.8rem' }}>Casa & Finanças</p>
           </div>
-
-          <MonthSelector />
-
-          {/* Botão Logout */}
-          <button
-            onClick={handleLogout}
-            title="Sair"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              backgroundColor: 'transparent',
-              color: 'var(--color-text-muted)',
-              border: '2px solid var(--color-border)',
-              borderRadius: '50px',
-              padding: '0.45rem 1rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              height: '40px',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.color = '#ef4444';
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#ef4444';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.color = 'var(--color-text-muted)';
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--color-border)';
-            }}
-          >
-            <LogOut size={15} />
-            <span>Sair</span>
-          </button>
+          
+          <div className="header-controls">
+            <div className="theme-toggle-container">
+              <ThemeToggle />
+            </div>
+            <div className="month-selector-container">
+              <MonthSelector />
+            </div>
+          </div>
         </header>
         <Outlet />
       </main>
+
+      {/* --- MOBILE NAVIGATION BAR (M3 BOTTOM NAV) --- */}
+      <div className="m3-bottom-nav">
+        {primaryNavItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `m3-bottom-nav-item ${isActive ? 'active' : ''}`}
+          >
+            <div className="m3-bottom-nav-icon-container">
+              {item.icon}
+            </div>
+            <span className="m3-bottom-nav-label">{item.label}</span>
+          </NavLink>
+        ))}
+        {/* Botão "Mais" */}
+        <button 
+          className={`m3-bottom-nav-item ${isBottomSheetOpen ? 'active' : ''}`}
+          onClick={() => setIsBottomSheetOpen(true)}
+          aria-label="Abrir menu de opções"
+        >
+          <div className="m3-bottom-nav-icon-container">
+            <M3Icon name="more_horiz" lucideIcon={<MoreHorizontal size={20} />} />
+          </div>
+          <span className="m3-bottom-nav-label">Mais</span>
+        </button>
+      </div>
+
+      {/* --- MOBILE BOTTOM SHEET DIALOG --- */}
+      <div className={`bottom-sheet-wrapper ${isBottomSheetOpen ? 'open' : ''}`}>
+        <div 
+          className="bottom-sheet-scrim" 
+          onClick={() => setIsBottomSheetOpen(false)} 
+        />
+        <div className="bottom-sheet-content">
+          <div className="bottom-sheet-drag-handle" />
+          <div className="bottom-sheet-header">
+            <h3>Mais Opções</h3>
+            <button 
+              className="bottom-sheet-close-btn"
+              onClick={() => setIsBottomSheetOpen(false)}
+            >
+              <M3Icon name="close" lucideIcon={<X size={20} />} />
+            </button>
+          </div>
+          <div className="bottom-sheet-menu-list">
+            {secondaryNavItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `bottom-sheet-menu-item ${isActive ? 'active' : ''}`}
+                onClick={() => setIsBottomSheetOpen(false)}
+              >
+                <div className="bottom-sheet-icon-wrapper">{item.icon}</div>
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+            {/* Item Logout no celular */}
+            <button
+              onClick={() => {
+                setIsBottomSheetOpen(false);
+                handleLogout();
+              }}
+              className="bottom-sheet-menu-item bottom-sheet-logout"
+            >
+              <div className="bottom-sheet-icon-wrapper">
+                <M3Icon name="logout" lucideIcon={<LogOut size={20} />} />
+              </div>
+              <span>Sair do Aplicativo</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <GapCheckerModal />
     </div>
   );

@@ -84,7 +84,8 @@ export const gastosFixosService = {
     mes_ano: string, 
     valor_real: number, 
     valor_previsto_ajustado?: number | null,
-    dia_pagamento_real?: number | null
+    dia_pagamento_real?: number | null,
+    data_pagamento_real?: string | null
   ): Promise<RegistroGastoFixo> {
     
     // Verifica se já existe um registro
@@ -93,7 +94,7 @@ export const gastosFixosService = {
       .select('id_registro')
       .eq('id_gasto_fixo', id_gasto_fixo)
       .eq('mes_ano', mes_ano)
-      .single();
+      .maybeSingle(); // Usando maybeSingle() para evitar erro no console se não existir
 
     if (existing) {
       // Atualiza
@@ -103,6 +104,9 @@ export const gastosFixosService = {
       }
       if (dia_pagamento_real !== undefined) {
         updateData.dia_pagamento_real = dia_pagamento_real;
+      }
+      if (data_pagamento_real !== undefined) {
+        updateData.data_pagamento_real = data_pagamento_real;
       }
 
       const { data, error } = await supabase
@@ -123,7 +127,8 @@ export const gastosFixosService = {
           mes_ano,
           valor_real,
           valor_previsto_ajustado: valor_previsto_ajustado || null,
-          dia_pagamento_real: dia_pagamento_real || null
+          dia_pagamento_real: dia_pagamento_real || null,
+          data_pagamento_real: data_pagamento_real || null
         }])
         .select()
         .single();

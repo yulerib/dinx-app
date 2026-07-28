@@ -69,3 +69,11 @@ A fonte da verdade será o **Supabase**.
 - `id_entrada` (UUID REFERENCES Entradas)
 - `mes_ano` (String): Formato YYYY-MM.
 - `valor_real` (Number): Valor efetivamente recebido no mês.
+
+**Tabela: `Observacoes`**
+- `id` (UUID): Identificador único.
+- `titulo` (String): Título da anotação.
+- `conteudo` (String): Conteúdo em texto.
+- `created_at` (String): Data de criação.
+- `updated_at` (String): Data de última atualização.
+

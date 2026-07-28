@@ -321,22 +321,12 @@ export function Assistente() {
       maxHeight: '100%',
     }}>
       {/* Header */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{
-            width: '40px', height: '40px',
-            borderRadius: 'var(--radius-full)',
-            background: 'linear-gradient(135deg, var(--primary-dark), var(--primary))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <Sparkles size={20} color="white" />
-          </div>
-          <div>
-            <h1 className="text-h1" style={{ margin: 0, fontSize: '1.5rem' }}>Assistente Financeiro</h1>
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Converse, peça análises ou dê comandos diretos ao app
-            </p>
-          </div>
+      <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 className="text-h1" style={{ margin: 0 }}>Assistente Financeiro</h1>
+          <p className="text-muted" style={{ margin: '0.25rem 0 0 0' }}>
+            Converse, peça análises ou dê comandos diretos ao app
+          </p>
         </div>
 
         {/* Botão de Configuração de Chave */}

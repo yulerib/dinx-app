@@ -9,6 +9,7 @@ import { Entradas } from './pages/Entradas';
 import { Extrato } from './pages/Extrato';
 import { Assistente } from './pages/Assistente';
 import { Reserva } from './pages/Reserva';
+import { Observacoes } from './pages/Observacoes';
 import { MonthProvider } from './contexts/MonthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Login } from './pages/Login';
@@ -55,6 +56,7 @@ function App() {
               <Route path="extrato" element={<Extrato />} />
               <Route path="reserva" element={<Reserva />} />
               <Route path="assistente" element={<Assistente />} />
+              <Route path="observacoes" element={<Observacoes />} />
             </Route>
           </Routes>
         </BrowserRouter>

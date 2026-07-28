@@ -3,7 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
-import { Plus, Check, Loader2, Edit2, Trash2, PiggyBank, ArrowLeftRight } from 'lucide-react';
+import { Plus, Check, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { reservaService } from '../services/reserva';
 import type { MovimentacaoReservaMensal } from '../types/database.types';
@@ -44,6 +44,10 @@ export function Reserva() {
   // Extrato filter state
   const [filtroSaldoDevedor, setFiltroSaldoDevedor] = useState(false);
 
+  // Controle de abas e alertas de repot
+  const [activeTab, setActiveTab] = useState<'mensal' | 'repor'>('mensal');
+  const [dismissedAlert, setDismissedAlert] = useState(false);
+
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const fetchData = async () => {
@@ -66,28 +70,29 @@ export function Reserva() {
     fetchData();
   }, [mesAno]);
 
-  // Lógica de cálculo de saldos baseada no histórico histórico real de transações efetuadas
+  // Lógica de cálculo de saldos baseada no histórico real de transações efetuadas
   let saldoReserva = 0;
   let saldoDevedorAcumulado = 0;
   const transacoesZeradoras = new Set<string>();
 
   // Processa o histórico cronológico de transações de fato ocorridas
   historico.forEach(mov => {
-    // 1. Calcular Saldo da Reserva
+    // 1. Calcular Saldo da Reserva (reposto não altera o saldo geral físico da conta)
     if (mov.tipo === 'entrada') {
       saldoReserva += mov.valor;
     } else {
       saldoReserva -= mov.valor;
     }
 
-    // 2. Calcular Saldo Devedor e identificar transação que zerou
-    if (mov.tipo === 'saida' && mov.gerar_saldo_devedor) {
-      saldoDevedorAcumulado += mov.valor;
-    } else if (mov.tipo === 'entrada' && mov.quitar_saldo_devedor) {
-      if (saldoDevedorAcumulado > 0) {
-        const novoSaldo = Math.max(0, saldoDevedorAcumulado - mov.valor);
-        if (novoSaldo === 0) {
-          transacoesZeradoras.add(mov.id); // Esta transação quitou / zerou o saldo devedor
+    // 2. Calcular Saldo Devedor e identificar transações zeradoras
+    if (!mov.reposto) {
+      if (mov.tipo === 'saida' && mov.gerar_saldo_devedor) {
+        saldoDevedorAcumulado += mov.valor;
+      } else if (mov.tipo === 'entrada' && mov.quitar_saldo_devedor) {
+        const novoSaldo = saldoDevedorAcumulado - mov.valor;
+        // Se a transação quitou (ou seja, levou o saldo acumulado de positivo para zero ou negativo)
+        if (novoSaldo <= 0 && saldoDevedorAcumulado > 0) {
+          transacoesZeradoras.add(mov.id);
         }
         saldoDevedorAcumulado = novoSaldo;
       }
@@ -277,6 +282,32 @@ export function Reserva() {
     return list;
   }, [movimentacoes, filtroSaldoDevedor, transacoesZeradoras, mesAno]);
 
+  // Lista geral de valores a repor ativos (independentemente do mês)
+  const movimentacoesAReporGeral = React.useMemo(() => {
+    return historico.filter(mov => (mov.gerar_saldo_devedor || mov.quitar_saldo_devedor) && !mov.reposto);
+  }, [historico]);
+
+  const showAutoResetAlert = React.useMemo(() => {
+    const temItensAReporAtivos = movimentacoesAReporGeral.length > 0;
+    return saldoDevedorAcumulado <= 0 && temItensAReporAtivos && !dismissedAlert;
+  }, [saldoDevedorAcumulado, movimentacoesAReporGeral, dismissedAlert]);
+
+  const handleResetValores = async () => {
+    if (!confirm('Deseja zerar devedores e a lista de valores a repor? Esta ação marcará todas as movimentações a repor atuais como resolvidas.')) {
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await reservaService.resetValoresARepor();
+      setDismissedAlert(false);
+      await fetchData();
+    } catch (error: any) {
+      alert('Erro ao zerar valores a repor: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="reserva-container theme-reserva" style={{ padding: '0.25rem 0' }}>
       {/* Resumo de saldos no topo */}
@@ -287,139 +318,265 @@ export function Reserva() {
         </Button>
       </div>
 
-      <div className="reserva-summary-grid">
-        <Card className="summary-card total-reserva">
-          <div className="card-icon"><PiggyBank size={24} color="#10b981" /></div>
-          <div className="card-info">
-            <span className="card-title">Saldo na Reserva</span>
-            <span className="card-value value-positive">{formatBRL(saldoReserva)}</span>
+      <Card className="summary-card-reserva" style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+          <div>
+            <h3 className="text-h3" style={{ margin: 0, fontSize: '1rem', color: 'var(--text-muted)' }}>Balanço da Reserva</h3>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+              <span className="text-h2" style={{ margin: 0, color: 'var(--md-sys-color-on-primary)' }}>
+                {formatBRL(saldoReserva)}
+              </span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 500, opacity: 0.85 }}>Saldo Total</span>
+            </div>
+            <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.35rem' }}>
+              <span style={{ fontWeight: 600 }}>
+                {saldoDevedorAcumulado > 0 ? (
+                  `A Repor: ${formatBRL(saldoDevedorAcumulado)}`
+                ) : saldoDevedorAcumulado < 0 ? (
+                  <span style={{ color: '#6BA35A' }}>
+                    Saldo para Gastar: {formatBRL(Math.abs(saldoDevedorAcumulado))}
+                  </span>
+                ) : (
+                  'Valores a Repor: Zerado'
+                )}
+              </span>
+            </div>
           </div>
-        </Card>
+        </div>
+      </Card>
 
-        <Card className="summary-card saldo-devedor">
-          <div className="card-icon"><ArrowLeftRight size={24} color={saldoDevedorAcumulado > 0 ? '#ef4444' : 'var(--text-color-muted)'} /></div>
-          <div className="card-info">
-            <span className="card-title">Valores a Repor</span>
-            <span className={`card-value ${saldoDevedorAcumulado > 0 ? 'value-negative' : 'value-zero'}`}>
-              {formatBRL(saldoDevedorAcumulado)}
+      {/* Alerta de Auto-Zeramento */}
+      {showAutoResetAlert && (
+        <Card className="alert-banner-reserva" style={{ marginBottom: '1.5rem', borderLeft: '4px solid var(--primary)', backgroundColor: 'rgba(107, 163, 90, 0.08)', padding: '1.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-color)' }}>
+              🎉 Os depósitos a repor cobriram totalmente as retiradas! Deseja zerar a lista de valores a repor ou manter o saldo atual?
             </span>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <Button onClick={handleResetValores} style={{ backgroundColor: 'var(--primary)', color: 'white', padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                Zerar Lista e Saldo
+              </Button>
+              <Button variant="outline" onClick={() => setDismissedAlert(true)} style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}>
+                Manter como está
+              </Button>
+            </div>
           </div>
         </Card>
+      )}
+
+      {/* Seletor de Abas */}
+      <div className="scrollable-tabs" style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', overflowX: 'auto', whiteSpace: 'nowrap', scrollbarWidth: 'none' }}>
+        <button
+          onClick={() => setActiveTab('mensal')}
+          style={{
+            padding: '0.5rem 1rem',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'mensal' ? '2px solid var(--color-reserva)' : '2px solid transparent',
+            color: activeTab === 'mensal' ? 'var(--text-main)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'mensal' ? 600 : 400,
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          Movimentações do Mês
+        </button>
+        <button
+          onClick={() => setActiveTab('repor')}
+          style={{
+            padding: '0.5rem 1rem',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'repor' ? '2px solid var(--color-reserva)' : '2px solid transparent',
+            color: activeTab === 'repor' ? 'var(--text-main)' : 'var(--text-muted)',
+            fontWeight: activeTab === 'repor' ? 600 : 400,
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+        >
+          Valores a Repor (Geral)
+        </button>
       </div>
 
-      <div>
-        {/* Extrato / Movimentações */}
-        <Card style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <h2 className="text-h2" style={{ margin: 0 }}>Movimentações do Mês</h2>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-muted)' }}>
-              <input
-                type="checkbox"
-                checked={filtroSaldoDevedor}
-                onChange={(e) => setFiltroSaldoDevedor(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              Ver apenas Valores a Repor
-            </label>
-          </div>
-
-          {isLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-              <Loader2 className="animate-spin" />
-              <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>Carregando dados...</span>
+      {activeTab === 'mensal' ? (
+        <div>
+          {/* Extrato / Movimentações */}
+          <Card style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <h2 className="text-h2" style={{ margin: 0 }}>Movimentações do Mês</h2>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600, color: 'var(--text-muted)' }}>
+                <input
+                  type="checkbox"
+                  checked={filtroSaldoDevedor}
+                  onChange={(e) => setFiltroSaldoDevedor(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Ver apenas Valores a Repor
+              </label>
             </div>
-          ) : movimentosExibir.length === 0 ? (
-            <p className="text-muted" style={{ margin: 0, padding: '1rem 0' }}>Nenhuma movimentação para o filtro selecionado neste mês.</p>
-          ) : (
-            <div className="reserva-extrato-list">
-              {movimentosExibir.map((item) => {
-                const isReal = item.status === 'realizado';
-                const isEntrada = item.tipo === 'entrada';
-                const isEditingInline = realizandoId === item.originalMov.id;
 
-                return (
-                  <div key={item.id} className={`reserva-item ${item.tipo} ${item.status}`}>
-                    <div className="reserva-item-header">
-                      <div className="reserva-item-meta">
-                        <span className="reserva-item-day">Dia {String(item.dia).padStart(2, '0')}</span>
-                        <span className={`badge-tipo ${item.tipo}`}>
-                          {isEntrada ? 'DEPÓSITO' : 'RETIRADA'}
-                        </span>
-                        {item.afeta_conta_geral && (
-                          <span className="badge-geral">CONTA GERAL</span>
-                        )}
-                        {item.gerar_saldo_devedor && (
-                          <span className="badge-devedor-gerar">A REPOR</span>
-                        )}
-                        {item.quitar_saldo_devedor && (
-                          <span className="badge-devedor-quitar">QUITAÇÃO</span>
-                        )}
-                      </div>
-                      <div className="reserva-item-actions">
-                        <button onClick={() => handleOpenEditModal(item.originalMov)} className="btn-icon" title="Editar"><Edit2 size={14} /></button>
-                        <button onClick={() => handleDeleteMovimentacao(item.originalMov.id)} className="btn-icon text-danger" title="Excluir"><Trash2 size={14} /></button>
-                      </div>
-                    </div>
+            {isLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                <Loader2 className="animate-spin" />
+                <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>Carregando dados...</span>
+              </div>
+            ) : movimentosExibir.length === 0 ? (
+              <p className="text-muted" style={{ margin: 0, padding: '1rem 0' }}>Nenhuma movimentação para o filtro selecionado neste mês.</p>
+            ) : (
+              <div className="reserva-extrato-list">
+                {movimentosExibir.map((item) => {
+                  const isReal = item.status === 'realizado';
+                  const isEntrada = item.tipo === 'entrada';
+                  const isEditingInline = realizandoId === item.originalMov.id;
 
-                    <div className="reserva-item-body">
-                      <div className="reserva-item-main">
-                        <span className="reserva-item-desc">{item.descricao}</span>
-                        {item.zerouSaldoDevedor && (
-                          <span className="badge-success-zero animate-pulse" style={{ marginLeft: '0.5rem' }}>
-                            🎉 Valores a Repor Zerados!
+                  return (
+                    <div key={item.id} className={`reserva-item ${item.tipo} ${item.status}`}>
+                      <div className="reserva-item-header">
+                        <div className="reserva-item-meta">
+                          <span className="reserva-item-day">Dia {String(item.dia).padStart(2, '0')}</span>
+                          <span className={`badge-tipo ${item.tipo}`}>
+                            {isEntrada ? 'DEPÓSITO' : 'RETIRADA'}
                           </span>
-                        )}
+                          {item.afeta_conta_geral && (
+                            <span className="badge-geral">CONTA GERAL</span>
+                          )}
+                          {item.gerar_saldo_devedor && (
+                            <span className="badge-devedor-gerar">A REPOR</span>
+                          )}
+                          {item.quitar_saldo_devedor && (
+                            <span className="badge-devedor-quitar">QUITAÇÃO</span>
+                          )}
+                        </div>
+                        <div className="reserva-item-actions">
+                          <button onClick={() => handleOpenEditModal(item.originalMov)} className="btn-icon" title="Editar"><Edit2 size={14} /></button>
+                          <button onClick={() => handleDeleteMovimentacao(item.originalMov.id)} className="btn-icon text-danger" title="Excluir"><Trash2 size={14} /></button>
+                        </div>
                       </div>
 
-                      <div className="reserva-item-value-section">
-                        {isEditingInline ? (
-                          <div className="realize-inline-form">
-                            <div style={{ maxWidth: '120px' }}>
-                              <CurrencyInput
-                                value={valorRealInput}
-                                onChange={(v) => setValorRealInput(v)}
-                              />
-                            </div>
-                            <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              value={diaRealInput}
-                              onChange={(e) => setDiaRealInput(Number(e.target.value))}
-                              style={{ width: '50px', padding: '0.25rem', border: '1px solid var(--border-color)', borderRadius: '4px' }}
-                              title="Dia Realizado"
-                            />
-                            <button onClick={() => handleSaveRealize(item.originalMov)} className="btn-confirm" title="Salvar Realizado"><Check size={14} /></button>
-                            <button onClick={() => setRealizandoId(null)} className="btn-cancel-inline">Cancelar</button>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <span className={`reserva-value ${isEntrada ? 'text-positive' : 'text-negative'}`}>
-                              {isEntrada ? '+' : '-'} {formatBRL(item.valor)}
+                      <div className="reserva-item-body">
+                        <div className="reserva-item-main">
+                          <span className="reserva-item-desc">{item.descricao}</span>
+                          {item.zerouSaldoDevedor && (
+                            <span className="badge-success-zero animate-pulse" style={{ marginLeft: '0.5rem' }}>
+                              🎉 Valores a Repor Zerados!
                             </span>
-                            {!isReal && item.isRecorrente && (
-                              <button
-                                onClick={() => handleStartRealize(item.originalMov)}
-                                className="btn-realize-trigger"
-                              >
-                                Confirmar
-                              </button>
-                            )}
-                            {isReal && item.isRecorrente && (
-                              <span className="realized-badge">REALIZADA</span>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
+
+                        <div className="reserva-item-value-section">
+                          {isEditingInline ? (
+                            <div className="realize-inline-form">
+                              <div style={{ maxWidth: '120px' }}>
+                                <CurrencyInput
+                                  value={valorRealInput}
+                                  onChange={(v) => setValorRealInput(v)}
+                                />
+                              </div>
+                              <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                value={diaRealInput}
+                                onChange={(e) => setDiaRealInput(Number(e.target.value))}
+                                style={{ width: '50px', padding: '0.25rem', border: '1px solid var(--border-color)', borderRadius: '4px' }}
+                                title="Dia Realizado"
+                              />
+                              <button onClick={() => handleSaveRealize(item.originalMov)} className="btn-confirm" title="Salvar Realizado"><Check size={14} /></button>
+                              <button onClick={() => setRealizandoId(null)} className="btn-cancel-inline">Cancelar</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <span className={`reserva-value ${isEntrada ? 'text-positive' : 'text-negative'}`}>
+                                {isEntrada ? '+' : '-'} {formatBRL(item.valor)}
+                              </span>
+                              {!isReal && item.isRecorrente && (
+                                <button
+                                  onClick={() => handleStartRealize(item.originalMov)}
+                                  className="btn-realize-trigger"
+                                >
+                                  Confirmar
+                                </button>
+                              )}
+                              {isReal && item.isRecorrente && (
+                                <span className="realized-badge">REALIZADA</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      ) : (
+        <div>
+          {/* Aba de Valores a Repor Geral */}
+          <Card style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <h2 className="text-h2" style={{ margin: 0 }}>Valores a Repor Pendentes</h2>
+              
+              <Button 
+                onClick={handleResetValores}
+                variant="outline"
+                disabled={movimentacoesAReporGeral.length === 0}
+                style={{ borderColor: 'var(--danger, #ef4444)', color: 'var(--danger, #ef4444)' }}
+              >
+                Zerar Saldo e Lista
+              </Button>
             </div>
-          )}
-        </Card>
-      </div>
+
+            {isLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                <Loader2 className="animate-spin" />
+                <span style={{ marginLeft: '0.5rem', fontWeight: 500 }}>Carregando dados...</span>
+              </div>
+            ) : movimentacoesAReporGeral.length === 0 ? (
+              <p className="text-muted" style={{ margin: 0, padding: '1rem 0' }}>Não há valores a repor pendentes no momento.</p>
+            ) : (
+              <div className="reserva-extrato-list">
+                {movimentacoesAReporGeral.map((item) => {
+                  const isEntrada = item.tipo === 'entrada';
+                  // Formatar data para DD/MM
+                  const [, m, d] = item.data.split('-');
+                  const dataFormatada = `${d}/${m}`;
+
+                  return (
+                    <div key={item.id} className={`reserva-item ${item.tipo} realizado`}>
+                      <div className="reserva-item-header">
+                        <div className="reserva-item-meta">
+                          <span className="reserva-item-day">{dataFormatada}</span>
+                          <span className={`badge-tipo ${item.tipo}`}>
+                            {isEntrada ? 'DEPÓSITO' : 'RETIRADA'}
+                          </span>
+                          {item.afeta_conta_geral && (
+                            <span className="badge-geral">CONTA GERAL</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="reserva-item-body">
+                        <div className="reserva-item-main">
+                          <span className="reserva-item-desc">{item.descricao}</span>
+                        </div>
+
+                        <div className="reserva-item-value-section">
+                          <span className={`reserva-value ${isEntrada ? 'text-positive' : 'text-negative'}`}>
+                            {isEntrada ? '+' : '-'} {formatBRL(item.valor)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
 
       {/* Modal de Cadastro/Edição */}
       <Modal

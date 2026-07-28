@@ -1,0 +1,335 @@
+/* Material Design 3 Design Tokens
+   This file contains variables for light and dark themes, categorized by section (Dashboard, Fixos, Diários, Parcelas, Entradas, Reserva)
+*/
+
+:root {
+  /* MD3 Elevation Shadows (Smooth overlapping shadows) */
+  --md-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+  --md-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
+  --md-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
+  --md-elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30);
+  --md-elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 3px 4px 0px rgba(0, 0, 0, 0.30);
+
+  /* MD3 Corner Shapes */
+  --md-shape-none: 0px;
+  --md-shape-extra-small: 4px;
+  --md-shape-small: 8px;
+  --md-shape-medium: 12px;       /* Chips, Mini cards, inputs */
+  --md-shape-large: 16px;        /* Cards, Side sheets */
+  --md-shape-extra-large: 28px;  /* Dialogs, FABs, main boxes */
+  --md-shape-full: 9999px;       /* Buttons, pill-badges, navigation active-state */
+
+  /* MD3 Motion / Animations (Cubic Beziers) */
+  --md-motion-easing-linear: cubic-bezier(0, 0, 1, 1);
+  --md-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-motion-easing-decelerate: cubic-bezier(0, 0, 0, 1);
+  --md-motion-easing-accelerate: cubic-bezier(0.3, 0, 1, 1);
+
+  --md-motion-duration-short-1: 50ms;
+  --md-motion-duration-short-2: 100ms;
+  --md-motion-duration-short-3: 150ms;
+  --md-motion-duration-medium-1: 200ms;
+  --md-motion-duration-medium-2: 250ms;
+  --md-motion-duration-medium-3: 300ms;
+  --md-motion-duration-long-1: 350ms;
+  --md-motion-duration-long-2: 400ms;
+}
+
+/* ========================================================
+   1. TEMA CLARO (LIGHT THEME) - VARIÁVEIS GERAIS E NEUTROS
+   ======================================================== */
+[data-theme='light'] {
+  /* Cores de Superfície e Fundo Neutros */
+  --md-sys-color-background: #F8F3E0;       /* Marfim quente original */
+  --md-sys-color-on-background: #1C1B12;    /* Chumbo neutro escuro */
+  --md-sys-color-surface: #FCFAF2;          /* Marfim claro original */
+  --md-sys-color-on-surface: #1C1B12;
+  --md-sys-color-surface-variant: #E7E3D4;  /* Tom cinza/marfim sutil */
+  --md-sys-color-on-surface-variant: #49473F;
+  --md-sys-color-outline: #7A776E;          /* Borda neutra */
+  --md-sys-color-outline-variant: #CBE6FF;  /* Bordas secundárias */
+
+  /* Semânticas de Erro (M3 padrão baseada em vermelho) */
+  --md-sys-color-error: #BA1A1A;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #FFDAD6;
+  --md-sys-color-on-error-container: #410002;
+  
+  --md-sys-color-success: #2E6C21;
+  --md-sys-color-on-success: #FFFFFF;
+  --md-sys-color-success-container: #B2F39E;
+  --md-sys-color-on-success-container: #022200;
+
+  --md-sys-color-warning: #8E4E00;
+  --md-sys-color-on-warning: #FFFFFF;
+  --md-sys-color-warning-container: #FFDCC3;
+  --md-sys-color-on-warning-container: #2E1500;
+
+  /* Eixos padrão da fonte Roboto Flex (Tema Claro) */
+  --md-sys-font-wght: 400;
+  --md-sys-font-grad: 0.1; /* Compensação de renderização clara */
+}
+
+/* ========================================================
+   2. TEMA ESCURO (DARK THEME) - VARIÁVEIS GERAIS E NEUTROS
+   ======================================================== */
+[data-theme='dark'] {
+  /* Cores de Superfície e Fundo Neutros */
+  --md-sys-color-background: #141414;       /* Cinza chumbo escuro plano */
+  --md-sys-color-on-background: #E6E2D9;    /* Off-white */
+  --md-sys-color-surface: #1D1D1C;          /* Glassmorphism/fundo card */
+  --md-sys-color-on-surface: #E6E2D9;
+  --md-sys-color-surface-variant: #49473F;
+  --md-sys-color-on-surface-variant: #CBC6BA;
+  --md-sys-color-outline: #949086;
+  --md-sys-color-outline-variant: #49473F;
+
+  /* Semânticas de Erro */
+  --md-sys-color-error: #FFB4AB;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000A;
+  --md-sys-color-on-error-container: #FFDAD6;
+
+  --md-sys-color-success: #97D785;
+  --md-sys-color-on-success: #023900;
+  --md-sys-color-success-container: #15520D;
+  --md-sys-color-on-success-container: #B2F39E;
+
+  --md-sys-color-warning: #FFB684;
+  --md-sys-color-on-warning: #4D2600;
+  --md-sys-color-warning-container: #6D3900;
+  --md-sys-color-on-warning-container: #FFDCC3;
+
+  /* Eixos padrão da fonte Roboto Flex (Tema Escuro) */
+  --md-sys-font-wght: 350; /* Um pouco mais fina no escuro para evitar desfoque */
+  --md-sys-font-grad: -0.2; /* Eixo de contraste negativo no escuro */
+}
+
+/* ========================================================
+   3. DESIGN TOKENS POR SEÇÃO (SECTIONS PALETTES)
+   ======================================================== */
+
+/* --- 3.1 DASHBOARD / GERAL (Amarelo #f5d916) --- */
+.theme-dashboard {
+  --section-color: #f5d916;
+}
+[data-theme='light'] .theme-dashboard {
+  --md-sys-color-primary: #676000;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #FCF4A3; /* Tom container amarelo macio */
+  --md-sys-color-on-primary-container: #201C00;
+  --md-sys-color-secondary: #616050;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #E8E4D3;
+  --md-sys-color-on-secondary-container: #1D1D16;
+}
+[data-theme='dark'] .theme-dashboard {
+  --md-sys-color-primary: #DED010;
+  --md-sys-color-on-primary: #363200;
+  --md-sys-color-primary-container: #4E4900;
+  --md-sys-color-on-primary-container: #FDF175;
+  --md-sys-color-secondary: #CBC7B3;
+  --md-sys-color-on-secondary: #323126;
+  --md-sys-color-secondary-container: #49483B;
+  --md-sys-color-on-secondary-container: #E8E4D3;
+}
+
+/* --- 3.2 GASTOS FIXOS (Soft Red-Orange #e86659) --- */
+.theme-fixos {
+  --section-color: #e86659;
+}
+[data-theme='light'] .theme-fixos {
+  --md-sys-color-primary: #AB3528;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #FFDAD5;
+  --md-sys-color-on-primary-container: #410002;
+  --md-sys-color-secondary: #775652;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #FFDAD5;
+  --md-sys-color-on-secondary-container: #2C1512;
+}
+[data-theme='dark'] .theme-fixos {
+  --md-sys-color-primary: #FFB4A9;
+  --md-sys-color-on-primary: #690005;
+  --md-sys-color-primary-container: #871C13;
+  --md-sys-color-on-primary-container: #FFDAD5;
+  --md-sys-color-secondary: #E7BDB7;
+  --md-sys-color-on-secondary: #442926;
+  --md-sys-color-secondary-container: #5D3E3B;
+  --md-sys-color-on-secondary-container: #FFDAD5;
+}
+
+/* --- 3.3 GASTOS DIÁRIOS (Orange #ff9a3f) --- */
+.theme-diarios {
+  --section-color: #ff9a3f;
+}
+[data-theme='light'] .theme-diarios {
+  --md-sys-color-primary: #9B4400;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #FFDBC9;
+  --md-sys-color-on-primary-container: #331200;
+  --md-sys-color-secondary: #765848;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #FFDBC9;
+  --md-sys-color-on-secondary-container: #2C160B;
+}
+[data-theme='dark'] .theme-diarios {
+  --md-sys-color-primary: #FFB68D;
+  --md-sys-color-on-primary: #532100;
+  --md-sys-color-primary-container: #763200;
+  --md-sys-color-on-primary-container: #FFDBC9;
+  --md-sys-color-secondary: #E6BEA9;
+  --md-sys-color-on-secondary: #432A1C;
+  --md-sys-color-secondary-container: #5C4032;
+  --md-sys-color-on-secondary-container: #FFDBC9;
+}
+
+/* --- 3.4 COMPRAS PARCELADAS (Purple #71418b) --- */
+.theme-parcelas {
+  --section-color: #71418b;
+}
+[data-theme='light'] .theme-parcelas {
+  --md-sys-color-primary: #784898;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #F3DBFF;
+  --md-sys-color-on-primary-container: #2D0046;
+  --md-sys-color-secondary: #675971;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #EFDDFB;
+  --md-sys-color-on-secondary-container: #22172C;
+}
+[data-theme='dark'] .theme-parcelas {
+  --md-sys-color-primary: #E2B6FF;
+  --md-sys-color-on-primary: #471566;
+  --md-sys-color-primary-container: #5F2E7E;
+  --md-sys-color-on-primary-container: #F3DBFF;
+  --md-sys-color-secondary: #D2C1DC;
+  --md-sys-color-on-secondary: #382B41;
+  --md-sys-color-secondary-container: #4E4259;
+  --md-sys-color-on-secondary-container: #EFDDFB;
+}
+
+/* --- 3.5 ENTRADAS & CRÉDITOS (Green #6BA35A) --- */
+.theme-entradas {
+  --section-color: #6BA35A;
+}
+[data-theme='light'] .theme-entradas {
+  --md-sys-color-primary: #296C20;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #ACF49B;
+  --md-sys-color-on-primary-container: #012200;
+  --md-sys-color-secondary: #53634E;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #D6E8CE;
+  --md-sys-color-on-secondary-container: #111F0F;
+}
+[data-theme='dark'] .theme-entradas {
+  --md-sys-color-primary: #91D781;
+  --md-sys-color-on-primary: #023900;
+  --md-sys-color-primary-container: #0F5207;
+  --md-sys-color-on-primary-container: #ACF49B;
+  --md-sys-color-secondary: #BACCAE;
+  --md-sys-color-on-secondary: #263422;
+  --md-sys-color-secondary-container: #3C4B37;
+  --md-sys-color-on-secondary-container: #D6E8CE;
+}
+
+/* --- 3.6 RESERVA FINANCEIRA (Light Blue #00a2e2) --- */
+.theme-reserva {
+  --section-color: #00a2e2;
+}
+[data-theme='light'] .theme-reserva {
+  --md-sys-color-primary: #00648F;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #C8E6FF;
+  --md-sys-color-on-primary-container: #001E30;
+  --md-sys-color-secondary: #4F616E;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #D2E5F5;
+  --md-sys-color-on-secondary-container: #0B1D29;
+}
+[data-theme='dark'] .theme-reserva {
+  --md-sys-color-primary: #89CEFF;
+  --md-sys-color-on-primary: #00344D;
+  --md-sys-color-primary-container: #004B6D;
+  --md-sys-color-on-primary-container: #C8E6FF;
+  --md-sys-color-secondary: #B6C9D8;
+  --md-sys-color-on-secondary: #1E323F;
+  --md-sys-color-secondary-container: #354956;
+  --md-sys-color-on-secondary-container: #D2E5F5;
+}
+
+/* --- 3.7 EXTRATO (Reusa Amarelo / Dashboard) --- */
+.theme-extrato {
+  --section-color: #f5d916;
+}
+[data-theme='light'] .theme-extrato {
+  --md-sys-color-primary: #676000;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #FCF4A3;
+  --md-sys-color-on-primary-container: #201C00;
+  --md-sys-color-secondary: #616050;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #E8E4D3;
+  --md-sys-color-on-secondary-container: #1D1D16;
+}
+[data-theme='dark'] .theme-extrato {
+  --md-sys-color-primary: #DED010;
+  --md-sys-color-on-primary: #363200;
+  --md-sys-color-primary-container: #4E4900;
+  --md-sys-color-on-primary-container: #FDF175;
+  --md-sys-color-secondary: #CBC7B3;
+  --md-sys-color-on-secondary: #323126;
+  --md-sys-color-secondary-container: #49483B;
+  --md-sys-color-on-secondary-container: #E8E4D3;
+}
+
+/* --- REDEFINIÇÃO DE VARIÁVEIS LEGADAS LOCAIS POR SEÇÃO --- */
+.theme-dashboard {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-fixos {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-diarios {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-parcelas {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-entradas {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-reserva {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+.theme-extrato {
+  --primary: var(--md-sys-color-primary) !important;
+  --border-color: var(--md-sys-color-outline-variant) !important;
+}
+
+/* --- TOKENS OVERRIDE SELECTOR FOR VISUAL SIMULATION --- */
+[data-theme-override="true"] .theme-dashboard,
+[data-theme-override="true"] .theme-fixos,
+[data-theme-override="true"] .theme-diarios,
+[data-theme-override="true"] .theme-parcelas,
+[data-theme-override="true"] .theme-entradas,
+[data-theme-override="true"] .theme-reserva,
+[data-theme-override="true"] .theme-extrato {
+  --md-sys-color-primary: inherit !important;
+  --md-sys-color-on-primary: inherit !important;
+  --md-sys-color-primary-container: inherit !important;
+  --md-sys-color-on-primary-container: inherit !important;
+  --md-sys-color-secondary: inherit !important;
+  --md-sys-color-on-secondary: inherit !important;
+  --md-sys-color-secondary-container: inherit !important;
+  --md-sys-color-on-secondary-container: inherit !important;
+  --section-color: inherit !important;
+}

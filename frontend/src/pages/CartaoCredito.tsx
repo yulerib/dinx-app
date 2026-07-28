@@ -489,11 +489,19 @@ export function CartaoCredito() {
       {/* Gráfico de Parcelas */}
       <Card style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
         <div>
-          <h3 className="text-h3" style={{ margin: 0, fontSize: '1.1rem' }}>Comprometido vs Limite</h3>
+          <h3 className="text-h3" style={{ margin: 0, fontSize: '1.1rem' }}>Fatura vs Limite</h3>
         </div>
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', fontSize: '12px', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1.5rem', fontSize: '12px', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#475569' }}></div>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-verde-entradas)' }}></div>
+            <span>Fatura (no limite)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-vermelho-fixos)' }}></div>
+            <span>Fatura (acima do limite)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--md-sys-color-primary)' }}></div>
             <span>Limite Teto</span>
           </div>
         </div>
@@ -519,8 +527,8 @@ export function CartaoCredito() {
                         {payload[0].payload.mesAnoFormatado}
                       </p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <p style={{ margin: 0, color: payload[0].value > payload[1]?.value ? 'var(--danger)' : 'var(--primary)', fontSize: '0.875rem' }}>
-                          Comprometido: <strong>{formatBRL(payload[0].value)}</strong>
+                        <p style={{ margin: 0, color: payload[0].value > payload[1]?.value ? 'var(--color-vermelho-fixos)' : 'var(--color-verde-entradas)', fontSize: '0.875rem' }}>
+                          Fatura: <strong>{formatBRL(payload[0].value)}</strong>
                         </p>
                         {payload[1] && (
                           <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.875rem' }}>
@@ -533,15 +541,15 @@ export function CartaoCredito() {
                 }
                 return null;
               }} />
-              <Bar name="Comprometido" dataKey="parcelasExecutado" radius={[4, 4, 0, 0]} maxBarSize={30}>
+              <Bar name="Fatura" dataKey="parcelasExecutado" radius={[4, 4, 0, 0]} maxBarSize={30}>
                 {
                   chartData.map((entry, index) => {
-                    const fill = entry.parcelasExecutado > entry.parcelasProjetado ? 'var(--danger)' : 'var(--primary)';
+                    const fill = entry.parcelasExecutado > entry.parcelasProjetado ? 'var(--color-vermelho-fixos)' : 'var(--color-verde-entradas)';
                     return <Cell key={`cell-${index}`} fill={fill} />;
                   })
                 }
               </Bar>
-              <Bar name="Limite Teto" dataKey="parcelasProjetado" fill="#475569" radius={[4, 4, 0, 0]} maxBarSize={30} />
+              <Bar name="Limite Teto" dataKey="parcelasProjetado" fill="var(--md-sys-color-primary)" radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>

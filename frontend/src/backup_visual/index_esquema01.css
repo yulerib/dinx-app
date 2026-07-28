@@ -1,0 +1,278 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Nova Paleta de Cores (Apenas Dark Mode) - Dark Space */
+  --bg-main: #050b08;      /* Fundo profundo com nuances esverdeadas */
+  --bg-card: rgba(14, 25, 20, 0.65); /* Fundo dos cards preparado para glassmorphism */
+  --text-main: #e2e8f0;    /* Branco off-white legível */
+  --text-muted: #94a3b8;   /* Cinza suave para texto secundário */
+  --border-color: rgba(16, 185, 129, 0.2); /* Borda esverdeada muito sutil */
+  
+  /* Cores Principais */
+  --primary: #10b981;      /* Emerald Green */
+  --primary-hover: #059669;
+  
+  /* Cores de Status Financeiro (Mantidas) */
+  --success: #10b981;      /* Emerald Green como sucesso */
+  --danger: #ef4444;       /* Vermelho padrão */
+  --warning: #f59e0b;      /* Amarelo padrão */
+  
+  /* Sombras */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.6), 0 2px 4px -2px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.6);
+  --shadow-glow: 0 12px 24px -8px rgba(16, 185, 129, 0.25);
+  
+  /* Raios de borda (mais redondos conforme requisito) */
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  
+  /* Transições micro-animações (cubic-bezier) */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reset Básico */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Layout Geral */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Utilitários Visuais */
+.card {
+  background-color: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-glow);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* Botões */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all var(--transition-normal);
+  will-change: transform;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: var(--bg-main); /* Preto para contraste no Spring Green */
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  color: var(--text-main);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  border: 1px solid var(--border-color);
+  background-color: transparent;
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background-color: var(--bg-card);
+  border-color: var(--primary);
+}
+
+.btn-danger {
+  background-color: var(--danger);
+  color: #fff;
+}
+
+/* Inputs e Forms */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.input-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  background-color: rgba(5, 11, 8, 0.8);
+  color: var(--text-main);
+  font-size: 1rem;
+  transition: all var(--transition-normal);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background-color: rgba(5, 11, 8, 1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+/* Tipografia Utilitária */
+.text-h1 { font-size: 2rem; font-weight: 700; margin-bottom: 1.5rem; letter-spacing: -0.025em; }
+.text-h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.025em; }
+.text-h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem; }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-warning { color: var(--warning); }
+
+/* Responsividade Mobile (Botões) */
+@media (max-width: 768px) {
+  .btn-text {
+    display: none;
+  }
+  .btn {
+    padding: 0.5rem; /* Botão quadrado apenas com ícone */
+  }
+}
+
+/* Resumo Consolidado por Categoria (Gastos Diários) */
+.consolidated-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1.1fr 1.3fr 1fr;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.cr-details {
+  display: contents; /* Permite que os filhos participem do grid pai diretamente */
+}
+
+.cr-detail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.cr-label {
+  display: none; /* Oculta o rótulo no desktop */
+}
+
+.cr-title {
+  font-weight: 500;
+}
+
+/* Responsividade do Consolidado por Categoria no Mobile */
+@media (max-width: 768px) {
+  .table-header-consolidado {
+    display: none !important;
+  }
+
+  .consolidated-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem 1rem !important;
+    background-color: rgba(14, 25, 20, 0.4);
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .cr-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .cr-details {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    width: 100%;
+  }
+
+  .cr-detail-item {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100%;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+    padding-bottom: 0.35rem;
+  }
+
+  .cr-detail-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .cr-label {
+    display: inline !important;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
+  .cr-value {
+    text-align: right;
+    font-size: 0.95rem;
+  }
+}

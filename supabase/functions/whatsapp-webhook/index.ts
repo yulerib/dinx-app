@@ -190,8 +190,11 @@ async function processAiMessage(userText: string, audioData?: { base64: string, 
     const functionResponses = [];
     for (const call of functionCalls) {
       const apiResponse = await executeTool(call.name, call.args);
+      const wrappedResponse = (apiResponse && typeof apiResponse === 'object' && !Array.isArray(apiResponse))
+        ? apiResponse
+        : { result: apiResponse };
       functionResponses.push({
-        functionResponse: { name: call.name, response: apiResponse }
+        functionResponse: { name: call.name, response: wrappedResponse }
       });
     }
     const nextResult = await chat.sendMessage(functionResponses as any);

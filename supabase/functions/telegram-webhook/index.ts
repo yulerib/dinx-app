@@ -10,7 +10,7 @@ const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || '';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `
-Você é o assistente financeiro pessoal do 'APP FINANCEIRO CASA'.
+Você é o assistente financeiro pessoal do 'Dinx App'.
 Seu objetivo é gerenciar os gastos do usuário com precisão.
 
 REGRAS CRÍTICAS:

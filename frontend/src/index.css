@@ -1,103 +1,89 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-
 :root {
-  /* Transições micro-animações (cubic-bezier) */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Transições micro-animações do Material Design 3 */
+  --transition-fast: var(--md-motion-duration-short-3) var(--md-motion-easing-standard);
+  --transition-normal: var(--md-motion-duration-medium-3) var(--md-motion-easing-standard);
 
-  /* Sombras físicas retrô */
-  --shadow-sm: 0 2px 0px rgba(0, 0, 0, 0.15);
-  --shadow-md: 0 4px 0px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.3);
+  /* Sombras e elevações M3 */
+  --shadow-sm: var(--md-elevation-1);
+  --shadow-md: var(--md-elevation-2);
+  --shadow-lg: var(--md-elevation-4);
   
-  /* Raios de borda (amigáveis e arredondados) */
-  --radius-sm: 8px;
-  --radius-md: 20px;   /* Pill */
-  --radius-lg: 25px;
-  --radius-xl: 30px;
+  /* Raios de borda M3 */
+  --radius-sm: var(--md-shape-small);
+  --radius-md: var(--md-shape-medium);
+  --radius-lg: var(--md-shape-large);
+  --radius-xl: var(--md-shape-extra-large);
 
-  /* Cores Temáticas de Seções */
-  --color-main: #7FFF00;     /* Chartreuse */
-  --color-fixos: #228B22;    /* Forest Green */
-  --color-diarios: #007FFF;  /* Azure */
-  --color-parcelas: #9D41FF; /* Cosmic Violet */
-  --color-reserva: #dc2626;  /* Crimson/Red */
+  /* Cores de Seção Legadas (Mantidas para compatibilidade rápida) */
+  --color-main: #f5d916;     /* Dashboard (Amarelo) */
+  --color-fixos: #e86659;    /* Gastos Fixos (Soft Red-Orange) */
+  --color-diarios: #ff9a3f;  /* Gastos Diários (Orange) */
+  --color-parcelas: #71418b; /* Compras Parceladas (Purple) */
+  --color-entradas: #6BA35A; /* Entradas & Créditos (Green) */
+  --color-reserva: #00a2e2;  /* Reserva Financeira (Light Blue) */
+  --color-extrato: #f5d916;  /* Extrato */
 }
 
-/* --- TEMA ESCURO (CHUMBO) --- */
-[data-theme='dark'] {
-  --bg-main: #141816;      /* Cinza chumbo escuro */
-  --bg-card: rgba(30, 36, 33, 0.75); /* Glassmorphism chumbo */
-  --text-main: #e2e8f0;    /* Off-white */
-  --text-muted: #809689;   /* Cinza esverdeado suave */
-  --border-color: rgba(127, 255, 0, 0.18); /* Borda Chartreuse opaca */
-  
-  --primary: var(--color-main);
-  --primary-hover: #6ee600;
-  
-  --success: #7FFF00;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-
-  --shadow-glow: 0 0 15px rgba(127, 255, 0, 0.12);
-  --bg-input: rgba(20, 24, 22, 0.85);
-}
-
-/* --- TEMA CLARO (CANARY YELLOW) --- */
+/* --- TEMA CLARO (CORES DE FUNDO ORIGINAIS) --- */
 [data-theme='light'] {
-  --bg-main: #FFFFE0;      /* Canary Yellow */
-  --bg-card: rgba(255, 255, 243, 0.9); /* Marfim quente */
-  --text-main: #1a221e;    /* Chumbo escuro para contraste */
-  --text-muted: #6b7a72;   /* Cinza esverdeado de contraste */
-  --border-color: rgba(127, 255, 0, 0.45); /* Borda Chartreuse visível */
+  --bg-main: #F8F3E0;      /* Marfim quente fosco original */
+  --bg-card: rgba(252, 250, 242, 0.9); /* Marfim claro original */
+  --text-main: #1E293B;    /* Chumbo escuro original */
+  --text-muted: #64748B;   /* Slate 500 original */
+  --border-color: rgba(245, 217, 22, 0.45); /* Borda amarela visível original */
   
-  --primary: #6ee600;      /* Chartreuse ligeiramente mais escuro para contraste */
-  --primary-hover: #5ebb00;
+  --primary: var(--md-sys-color-primary, var(--color-main));
+  --primary-hover: var(--primary);
   
-  --success: #228B22;      /* Forest Green como sucesso para contraste */
-  --danger: #dc2626;
-  --warning: #d97706;
+  --success: var(--md-sys-color-success, #6BA35A);
+  --danger: var(--md-sys-color-error, #e86659);
+  --warning: var(--md-sys-color-warning, #ff9a3f);
 
-  --shadow-glow: 0 0 15px rgba(127, 255, 0, 0.08);
+  --color-verde-entradas: hsl(106, 74%, 43%);
+  --color-vermelho-fixos: hsl(5, 82%, 56%);
+
+  --shadow-glow: 0 0 15px rgba(245, 217, 22, 0.08);
   --bg-input: rgba(255, 255, 255, 0.95);
+
+  /* Mapeamento de variáveis legadas / específicas de observações e layout */
+  --color-primary: var(--primary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-bg-card: var(--bg-card);
+  --color-text-main: var(--text-main);
+  --color-bg-body: var(--bg-main);
 }
 
-/* --- ADAPTAÇÕES ESPECÍFICAS DE SEÇÕES --- */
-.theme-fixos {
-  --primary: var(--color-fixos);
-  --primary-hover: #1e7a1e;
-  --border-color: rgba(34, 139, 34, 0.25);
-}
-[data-theme='light'] .theme-fixos {
-  --border-color: rgba(34, 139, 34, 0.45);
+/* --- TEMA ESCURO (CORES DE FUNDO ORIGINAIS) --- */
+[data-theme='dark'] {
+  --bg-main: #1A1A1A;      /* Cinza fosco plano original */
+  --bg-card: rgba(13, 13, 13, 0.85); /* 10% mais escuro original */
+  --text-main: #F1F5F9;    /* Off-white original */
+  --text-muted: #94A3B8;   /* Slate 400 original */
+  --border-color: rgba(245, 217, 22, 0.18); /* Borda amarela opaca original */
+  
+  --primary: var(--md-sys-color-primary, var(--color-main));
+  --primary-hover: var(--primary);
+  
+  --success: var(--md-sys-color-success, #6BA35A);
+  --danger: var(--md-sys-color-error, #e86659);
+  --warning: var(--md-sys-color-warning, #ff9a3f);
+
+  --color-verde-entradas: hsl(106, 64%, 38%);
+  --color-vermelho-fixos: hsl(5, 100%, 56%);
+
+  --shadow-glow: 0 0 15px rgba(245, 217, 22, 0.12);
+  --bg-input: rgba(26, 26, 26, 0.85);
+
+  /* Mapeamento de variáveis legadas / específicas de observações e layout */
+  --color-primary: var(--primary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-bg-card: var(--bg-card);
+  --color-text-main: var(--text-main);
+  --color-bg-body: var(--bg-main);
 }
 
-.theme-diarios {
-  --primary: var(--color-diarios);
-  --primary-hover: #006ec4;
-  --border-color: rgba(0, 127, 255, 0.25);
-}
-[data-theme='light'] .theme-diarios {
-  --border-color: rgba(0, 127, 255, 0.45);
-}
-
-.theme-parcelas {
-  --primary: var(--color-parcelas);
-  --primary-hover: #8636e0;
-  --border-color: rgba(157, 65, 255, 0.25);
-}
-[data-theme='light'] .theme-parcelas {
-  --border-color: rgba(157, 65, 255, 0.45);
-}
-
-.theme-reserva {
-  --primary: var(--color-reserva);
-  --primary-hover: #b91c1c;
-  --border-color: rgba(220, 38, 38, 0.25);
-}
-[data-theme='light'] .theme-reserva {
-  --border-color: rgba(220, 38, 38, 0.45);
-}
 
 /* Reset Básico */
 *, *::before, *::after {
@@ -107,13 +93,17 @@
 }
 
 body {
-  font-family: 'Space Mono', monospace;
+  font-family: 'Roboto Flex', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-main);
   line-height: 1.5;
   transition: background-color var(--transition-normal), color var(--transition-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Valores iniciais de eixos da Roboto Flex */
+  font-weight: var(--md-sys-font-wght);
+  font-variation-settings: 'wght' var(--md-sys-font-wght), 'GRAD' var(--md-sys-font-grad);
 }
 
 a {
@@ -143,21 +133,29 @@ button {
   width: 100%;
 }
 
-/* Utilitários Visuais */
 .card {
   background-color: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 2px solid var(--border-color); /* Bordas um pouco mais robustas/retrô */
-  border-radius: var(--radius-xl);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color); /* Borda fina M3 */
+  border-radius: var(--radius-lg);       /* 16px */
   padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);           /* Elevation 1 */
+  transition: background-color var(--transition-normal), 
+              border-color var(--transition-normal), 
+              box-shadow var(--transition-normal), 
+              transform var(--transition-fast);
+}
+
+.modal-card {
+  border-radius: var(--radius-xl) !important; /* 28px */
+  box-shadow: var(--shadow-lg) !important;       /* Elevation 4 */
 }
 
 .card:hover {
-  box-shadow: var(--shadow-glow), var(--shadow-md);
+  box-shadow: var(--shadow-md); /* Elevation 2 */
   border-color: var(--primary);
+  transform: translateY(-2px);
 }
 
 /* Botões */
@@ -166,58 +164,66 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.625rem 1.5rem;
-  border-radius: 50px; /* Completamente redondo/pílula */
-  font-weight: 700;
-  font-size: 0.85rem;
-  border: 1px solid var(--border-color);
-  transition: all var(--transition-fast);
-  will-change: transform;
-  box-shadow: var(--shadow-sm);
+  padding: 0.65rem 1.5rem;
+  border-radius: 100px; /* Pílula padrão M3 */
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), 
+              border-color var(--transition-fast), 
+              box-shadow var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast),
+              filter var(--transition-fast);
+  will-change: transform, box-shadow;
+  cursor: pointer;
+  user-select: none;
 }
 
 .btn:active {
-  transform: translateY(2px) scale(0.97);
+  transform: scale(0.97);
   box-shadow: none !important;
 }
 
 .btn-primary {
-  background-color: var(--primary);
-  color: #141816; /* Chumbo escuro para alto contraste no neon */
-  border-color: var(--primary);
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary) !important;
 }
 
 .btn-primary:hover {
-  background-color: var(--primary-hover);
-  border-color: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  filter: brightness(0.92);
+  box-shadow: var(--md-elevation-1);
+}
+
+[data-theme='dark'] .btn-primary:hover {
+  filter: brightness(1.08);
 }
 
 .btn-outline {
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--md-sys-color-outline);
   background-color: transparent;
-  color: var(--text-main);
+  color: var(--md-sys-color-primary);
 }
 
 .btn-outline:hover {
-  background-color: var(--bg-card);
-  border-color: var(--primary);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-color: var(--md-sys-color-primary);
+  box-shadow: var(--md-elevation-1);
 }
 
 .btn-danger {
-  background-color: var(--danger);
-  color: #fff;
-  border-color: var(--danger);
+  background-color: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
 }
 
 .btn-danger:hover {
-  background-color: #c53030;
-  border-color: #c53030;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  filter: brightness(0.9);
+  box-shadow: var(--md-elevation-1);
+}
+
+[data-theme='dark'] .btn-danger:hover {
+  filter: brightness(1.1);
 }
 
 /* Pequenos botões redondos de ícones para ações (Visual mais simpático) */
@@ -234,71 +240,69 @@ button[title="Excluir Compra"] {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 32px !important;
-  height: 32px !important;
+  width: 36px !important;
+  height: 36px !important;
   border-radius: 50% !important;
   border: 1px solid transparent !important;
-  background-color: rgba(255, 255, 255, 0.03) !important;
+  background-color: var(--md-sys-color-surface-variant) !important;
+  color: var(--md-sys-color-on-surface-variant) !important;
   transition: all var(--transition-fast) !important;
-}
-
-[data-theme='light'] button[title] {
-  background-color: rgba(0, 0, 0, 0.03) !important;
 }
 
 /* Modificações estéticas individuais nos botões redondos de ação */
 button[title*="Editar"]:hover {
-  background-color: rgba(0, 127, 255, 0.15) !important;
-  color: #007FFF !important;
-  border-color: rgba(0, 127, 255, 0.3) !important;
+  background-color: var(--md-sys-color-primary-container) !important;
+  color: var(--md-sys-color-on-primary-container) !important;
+  border-color: var(--md-sys-color-primary) !important;
 }
 button[title*="Excluir"]:hover,
 button[title*="Apagar"]:hover {
-  background-color: rgba(239, 68, 68, 0.15) !important;
-  color: #ef4444 !important;
-  border-color: rgba(239, 68, 68, 0.3) !important;
+  background-color: var(--md-sys-color-error-container) !important;
+  color: var(--md-sys-color-on-error-container) !important;
+  border-color: var(--md-sys-color-error) !important;
 }
 button[title="Zerar"]:hover {
-  background-color: rgba(127, 255, 0, 0.15) !important;
-  color: var(--primary) !important;
-  border-color: rgba(127, 255, 0, 0.3) !important;
+  background-color: var(--md-sys-color-warning-container) !important;
+  color: var(--md-sys-color-on-warning-container) !important;
+  border-color: var(--md-sys-color-warning) !important;
 }
 button[title="Adicionar / Ver"]:hover {
-  background-color: rgba(0, 127, 255, 0.15) !important;
-  color: #007FFF !important;
-  border-color: rgba(0, 127, 255, 0.3) !important;
+  background-color: var(--md-sys-color-primary-container) !important;
+  color: var(--md-sys-color-on-primary-container) !important;
+  border-color: var(--md-sys-color-primary) !important;
 }
 
 /* Inputs e Forms */
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
 }
 
 .input-group label {
   font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  margin-left: 4px;
 }
 
 .input {
   width: 100%;
-  padding: 0.75rem 1.25rem;
-  border-radius: var(--radius-md); /* Redondo retrô */
-  border: 2px solid var(--border-color);
-  background-color: var(--bg-input);
-  color: var(--text-main);
+  padding: 0.75rem 1rem;
+  border-radius: var(--md-shape-small); /* 8px arredondamento M3 */
+  border: 1px solid var(--md-sys-color-outline);
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
   font-family: inherit;
   font-size: 0.95rem;
-  transition: all var(--transition-normal);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(127, 255, 0, 0.18);
+  border: 2px solid var(--md-sys-color-primary);
+  padding: calc(0.75rem - 1px) calc(1rem - 1px); /* Compensa a espessura maior */
 }
 
 /* Tipografia Utilitária */
@@ -426,211 +430,348 @@ button[title="Adicionar / Ver"]:hover {
 }
 
 /* --- COLORIZAÇÃO DOS ELEMENTOS & CABEÇALHOS POR ABA --- */
-.theme-dashboard h1 {
-  color: var(--color-main) !important;
-}
-[data-theme='light'] .theme-dashboard h1 {
-  color: var(--text-main) !important;
-}
-.theme-fixos h1 {
-  color: var(--color-fixos) !important;
-}
-.theme-diarios h1 {
-  color: var(--color-diarios) !important;
-}
-.theme-parcelas h1 {
-  color: var(--color-parcelas) !important;
-}
-.theme-reserva h1 {
-  color: var(--color-reserva) !important;
+h1, .text-h1 {
+  color: var(--md-sys-color-primary) !important;
 }
 
 /* --- ESTILIZAÇÃO E CONTRASTE DOS STATCARDS (VISÃO GERAL) --- */
-/* Estilo ocioso (Fundo levemente colorido por seção) */
-.theme-fixos.card {
-  background-color: rgba(34, 139, 34, 0.08) !important;
-  border-color: rgba(34, 139, 34, 0.3) !important;
-}
-.theme-diarios.card {
-  background-color: rgba(0, 127, 255, 0.08) !important;
-  border-color: rgba(0, 127, 255, 0.3) !important;
-}
-.theme-parcelas.card {
-  background-color: rgba(157, 65, 255, 0.08) !important;
-  border-color: rgba(157, 65, 255, 0.3) !important;
-}
-.theme-reserva.card {
-  background-color: rgba(220, 38, 38, 0.08) !important;
-  border-color: rgba(220, 38, 38, 0.3) !important;
-}
-
-/* Efeito de preenchimento 100% no hover com transição e alto contraste */
+/* Estilo ocioso (Fundo container macio M3 por seção) */
 .theme-fixos.card,
 .theme-diarios.card,
 .theme-parcelas.card,
+.theme-entradas.card,
 .theme-reserva.card {
-  transition: background-color var(--transition-normal), border-color var(--transition-normal), transform var(--transition-fast) !important;
+  background-color: var(--md-sys-color-primary-container) !important;
+  border-color: var(--md-sys-color-outline-variant) !important;
+  color: var(--md-sys-color-on-primary-container) !important;
+  transition: background-color var(--transition-normal), 
+              border-color var(--transition-normal), 
+              box-shadow var(--transition-normal), 
+              transform var(--transition-fast) !important;
 }
 
-.theme-fixos.card:hover {
-  background-color: var(--color-fixos) !important;
-  border-color: var(--color-fixos) !important;
-}
-.theme-diarios.card:hover {
-  background-color: var(--color-diarios) !important;
-  border-color: var(--color-diarios) !important;
-}
-.theme-parcelas.card:hover {
-  background-color: var(--color-parcelas) !important;
-  border-color: var(--color-parcelas) !important;
-}
-.theme-reserva.card:hover {
-  background-color: var(--color-reserva) !important;
-  border-color: var(--color-reserva) !important;
+.theme-fixos.card *,
+.theme-diarios.card *,
+.theme-parcelas.card *,
+.theme-entradas.card *,
+.theme-reserva.card * {
+  color: var(--md-sys-color-on-primary-container) !important;
 }
 
-/* Forçar contraste de fontes no hover de StatCards */
+.theme-fixos.card .text-muted,
+.theme-diarios.card .text-muted,
+.theme-parcelas.card .text-muted,
+.theme-entradas.card .text-muted,
+.theme-reserva.card .text-muted {
+  color: var(--md-sys-color-on-primary-container) !important;
+  opacity: 0.75 !important;
+}
+
+.theme-fixos.card svg,
+.theme-diarios.card svg,
+.theme-parcelas.card svg,
+.theme-entradas.card svg,
+.theme-reserva.card svg {
+  stroke: var(--md-sys-color-on-primary-container) !important;
+}
+
+/* Efeito de preenchimento M3 Primary no hover */
 .theme-fixos.card:hover,
 .theme-diarios.card:hover,
 .theme-parcelas.card:hover,
+.theme-entradas.card:hover,
 .theme-reserva.card:hover {
-  color: #ffffff !important;
+  background-color: var(--md-sys-color-primary) !important;
+  border-color: var(--md-sys-color-primary) !important;
+  color: var(--md-sys-color-on-primary) !important;
+  box-shadow: var(--md-elevation-3) !important;
 }
+
 .theme-fixos.card:hover *,
 .theme-diarios.card:hover *,
 .theme-parcelas.card:hover *,
+.theme-entradas.card:hover *,
 .theme-reserva.card:hover * {
-  color: #ffffff !important;
+  color: var(--md-sys-color-on-primary) !important;
 }
+
 .theme-fixos.card:hover .text-muted,
 .theme-diarios.card:hover .text-muted,
 .theme-parcelas.card:hover .text-muted,
+.theme-entradas.card:hover .text-muted,
 .theme-reserva.card:hover .text-muted {
-  color: rgba(255, 255, 255, 0.75) !important;
+  color: var(--md-sys-color-on-primary) !important;
+  opacity: 0.8 !important;
 }
+
 .theme-fixos.card:hover svg,
 .theme-diarios.card:hover svg,
 .theme-parcelas.card:hover svg,
+.theme-entradas.card:hover svg,
 .theme-reserva.card:hover svg {
-  stroke: #ffffff !important;
+  stroke: var(--md-sys-color-on-primary) !important;
 }
 
-/* --- ESTILIZAÇÃO E CONTRASTE DOS BOXES PRINCIPAIS DE RESUMO --- */
-/* Resumo Geral (Chartreuse) */
-.summary-card-geral {
-  background-color: var(--color-main) !important;
-  border-color: var(--color-main) !important; /* Sem outline preto */
-  color: #141816 !important;
-}
-.summary-card-geral * {
-  color: #141816 !important;
-}
-.summary-card-geral .text-muted {
-  color: rgba(20, 24, 22, 0.7) !important;
-}
-/* Barra de progresso interna do Resumo Geral */
-.summary-card-geral div[style*="height: 6px"] {
-  background-color: rgba(20, 24, 22, 0.15) !important;
-  border-color: rgba(20, 24, 22, 0.25) !important;
-}
-.summary-card-geral div[style*="height: 100%"] {
-  background-color: #141816 !important;
+/* --- ESTILIZAÇÃO E CONTRASTE DOS BOXES PRINCIPAIS DE RESUMO M3 --- */
+.summary-card-geral,
+.summary-card-fixos,
+.summary-card-diarios,
+.summary-card-parcelas,
+.summary-card-entradas,
+.summary-card-reserva {
+  background-color: var(--md-sys-color-primary) !important;
+  border-color: var(--md-sys-color-primary) !important;
+  color: var(--md-sys-color-on-primary) !important;
+  box-shadow: var(--md-elevation-2);
 }
 
-/* Resumos de Seções (Preenchimento 100% Sólido) */
-.summary-card-fixos {
-  background-color: var(--color-fixos) !important;
-  border-color: var(--color-fixos) !important;
-  color: #ffffff !important;
-}
-.summary-card-fixos * {
-  color: #ffffff !important;
-}
-.summary-card-fixos .text-muted {
-  color: rgba(255, 255, 255, 0.75) !important;
+.summary-card-geral *,
+.summary-card-fixos *,
+.summary-card-diarios *,
+.summary-card-parcelas *,
+.summary-card-entradas *,
+.summary-card-reserva * {
+  color: var(--md-sys-color-on-primary) !important;
 }
 
-.summary-card-diarios {
-  background-color: var(--color-diarios) !important;
-  border-color: var(--color-diarios) !important;
-  color: #ffffff !important;
-}
-.summary-card-diarios * {
-  color: #ffffff !important;
-}
-.summary-card-diarios .text-muted {
-  color: rgba(255, 255, 255, 0.75) !important;
+.summary-card-geral .text-muted,
+.summary-card-fixos .text-muted,
+.summary-card-diarios .text-muted,
+.summary-card-parcelas .text-muted,
+.summary-card-entradas .text-muted,
+.summary-card-reserva .text-muted {
+  color: var(--md-sys-color-on-primary) !important;
+  opacity: 0.8 !important;
 }
 
-.summary-card-parcelas {
-  background-color: var(--color-parcelas) !important;
-  border-color: var(--color-parcelas) !important;
-  color: #ffffff !important;
-}
-.summary-card-parcelas * {
-  color: #ffffff !important;
-}
-.summary-card-parcelas .text-muted {
-  color: rgba(255, 255, 255, 0.75) !important;
-}
-
-/* Barras de progresso e desvio internas dos resumos de seções */
+/* Barras de progresso e desvio internas dos resumos */
+.summary-card-geral div[style*="height: 6px"],
 .summary-card-fixos div[style*="height: 6px"],
 .summary-card-diarios div[style*="height: 6px"],
 .summary-card-parcelas div[style*="height: 6px"],
+.summary-card-entradas div[style*="height: 6px"],
+.summary-card-reserva div[style*="height: 6px"],
 .summary-card-diarios div[style*="height: 8px"] {
-  background-color: rgba(255, 255, 255, 0.2) !important;
+  background-color: rgba(255, 255, 255, 0.25) !important;
   border-color: rgba(255, 255, 255, 0.15) !important;
 }
+
+.summary-card-geral div[style*="height: 100%"],
 .summary-card-fixos div[style*="height: 100%"],
 .summary-card-diarios div[style*="height: 100%"],
-.summary-card-parcelas div[style*="height: 100%"] {
+.summary-card-parcelas div[style*="height: 100%"],
+.summary-card-entradas div[style*="height: 100%"],
+.summary-card-reserva div[style*="height: 100%"] {
   background-color: #ffffff !important;
 }
 
 /* Estilo do desvio diário (BalanceProgressBar) na aba diários */
 .summary-card-diarios div[style*="width: 2px"] {
-  background-color: rgba(255, 255, 255, 0.5) !important;
+  background-color: rgba(255, 255, 255, 0.6) !important;
 }
+
 .summary-card-diarios div[style*="position: absolute"][style*="background-color"] {
   background-color: #ffffff !important;
 }
 
-/* --- REGRAS PARA ESTOURO DE ORÇAMENTO (IS-OVERBUDGET) --- */
-/* Forçar barra de progresso interna a ficar vermelha quando estourada */
-.summary-card-geral.is-overbudget div[style*="height: 100%"] {
-  background-color: var(--danger) !important;
-}
-.summary-card-fixos.is-overbudget div[style*="height: 100%"] {
-  background-color: var(--danger) !important;
-}
-.summary-card-diarios.is-overbudget div[style*="height: 100%"] {
-  background-color: var(--danger) !important;
-}
-.summary-card-parcelas.is-overbudget div[style*="height: 100%"] {
-  background-color: var(--danger) !important;
-}
-
-/* Barra do desvio diário (BalanceProgressBar) fica vermelha quando estourada */
-.summary-card-diarios.is-overbudget div[style*="position: absolute"][style*="background-color"] {
-  background-color: var(--danger) !important;
-}
 
 /* Tooltip Popup global overrides */
 .warning-tooltip-popup {
-  color: var(--text-main) !important;
-  background-color: var(--bg-card) !important;
-  border: 1px solid var(--border-color) !important;
+  color: var(--md-sys-color-on-surface) !important;
+  background-color: var(--md-sys-color-surface) !important;
+  border: 1px solid var(--md-sys-color-outline-variant) !important;
+  box-shadow: var(--md-elevation-3) !important;
+  border-radius: var(--md-shape-medium) !important;
 }
+
 .warning-tooltip-popup * {
-  color: var(--text-main) !important;
+  color: var(--md-sys-color-on-surface) !important;
 }
 
 /* Force Warning Icons to keep warning color inside themed cards */
 svg[stroke="var(--warning)"],
 .warning-tooltip-popup svg {
-  stroke: var(--warning) !important;
+  stroke: var(--md-sys-color-warning) !important;
 }
 
+/* --- ESTILIZAÇÃO E CONTRASTE DOS ÍCONES DE NOVAS AÇÕES (BOTÕES DE CRIAÇÃO) --- */
+/* Deixa o ícone de + ou outros ícones internos de botões mais bold */
+.btn svg,
+button svg {
+  stroke-width: 3.2px !important;
+}
 
+/* Sub-tons dos ícones para cada seção no Modo Claro e Escuro */
+.theme-entradas button svg,
+.theme-entradas .btn svg {
+  stroke: #1b4712 !important;
+}
 
+.theme-fixos button svg,
+.theme-fixos .btn svg {
+  stroke: #591612 !important;
+}
+
+.theme-diarios button svg,
+.theme-diarios .btn svg {
+  stroke: #733100 !important;
+}
+
+.theme-parcelas button svg,
+.theme-parcelas .btn svg {
+  stroke: #32114c !important;
+}
+
+.theme-reserva button svg,
+.theme-reserva .btn svg {
+  stroke: #003e59 !important;
+}
+
+.theme-dashboard button svg,
+.theme-dashboard .btn svg,
+.theme-extrato button svg,
+.theme-extrato .btn svg {
+  stroke: #4d4600 !important;
+}
+
+/* ==========================================================================
+   5. CALIBRAÇÃO ESTÁTICA DEFINITIVA (M3 - ROBOTO FLEX & CORES HSL)
+   ========================================================================== */
+
+/* --- CONFIGURAÇÃO E CALIBRAÇÃO DE FONTES ROBOTO FLEX VARIABLE --- */
+html, body {
+  font-family: 'Roboto Flex Variable', sans-serif !important;
+}
+
+/* Corpo do App */
+body, p, span:not(.cr-value):not(.material-symbols-outlined):not(.material-symbols-rounded):not(.material-symbols-sharp):not(.m3-bottom-nav-label):not(.nav-label), li, label, input, select, textarea, button:not(.btn):not(.cr-value):not(.m3-bottom-nav-item) {
+  font-variation-settings: 'wght' 1000, 'wdth' 151, 'GRAD' 0 !important;
+  font-stretch: 151% !important;
+}
+
+/* Títulos (H1 / H2) */
+.text-h1, h1, .text-h2, h2, .sidebar-header h2, .bottom-sheet-header h3 {
+  font-variation-settings: 'wght' 1000, 'wdth' 65, 'GRAD' 0 !important;
+  font-stretch: 65% !important;
+}
+
+/* Subtítulos (H3) */
+.text-h3, h3, .stat-card-title {
+  font-variation-settings: 'wght' 650, 'wdth' 151, 'GRAD' 0 !important;
+  font-stretch: 151% !important;
+}
+
+/* Valores Numéricos / Tabelas / Badges */
+.cr-value, td, th, .stat-card-value, .fixed-summary-row1 span, .fixed-summary-proj, .progress-bar-label, [class*="value-"], [class*="amount-"] {
+  font-family: 'Roboto Flex Variable', sans-serif !important;
+  font-variation-settings: 'wght' 600, 'wdth' 90, 'GRAD' 0 !important;
+  font-stretch: 90% !important;
+}
+
+/* Botões e Links de Menu */
+.btn, .nav-link, .bottom-sheet-menu-item, .m3-bottom-nav-item {
+  font-variation-settings: 'wght' 1150, 'wdth' 151, 'GRAD' 0 !important;
+  font-stretch: 151% !important;
+}
+
+/* --- CALIBRAÇÃO DAS CORES DE SEÇÕES (MODO CLARO) --- */
+[data-theme='light'] .theme-dashboard,
+[data-theme='light'] .theme-extrato,
+[data-theme='light'].theme-dashboard,
+[data-theme='light'].theme-extrato {
+  --md-sys-color-primary: hsl(53, 100%, 44%) !important;
+  --md-sys-color-primary-container: hsl(53, 100%, 95%) !important;
+  --md-sys-color-on-primary-container: hsl(53, 100%, 40%) !important;
+  --section-color: hsl(53, 100%, 44%) !important;
+}
+
+[data-theme='light'] .theme-fixos,
+[data-theme='light'].theme-fixos {
+  --md-sys-color-primary: hsl(5, 82%, 56%) !important;
+  --md-sys-color-primary-container: hsl(5, 82%, 94%) !important;
+  --md-sys-color-on-primary-container: hsl(5, 82%, 40%) !important;
+  --section-color: hsl(5, 82%, 56%) !important;
+}
+
+[data-theme='light'] .theme-diarios,
+[data-theme='light'].theme-diarios {
+  --md-sys-color-primary: hsl(28, 100%, 60%) !important;
+  --md-sys-color-primary-container: hsl(28, 100%, 94%) !important;
+  --md-sys-color-on-primary-container: hsl(28, 100%, 40%) !important;
+  --section-color: hsl(28, 100%, 60%) !important;
+}
+
+[data-theme='light'] .theme-parcelas,
+[data-theme='light'].theme-parcelas {
+  --md-sys-color-primary: hsl(278, 48%, 41%) !important;
+  --md-sys-color-primary-container: hsl(278, 48%, 93%) !important;
+  --md-sys-color-on-primary-container: hsl(278, 48%, 38%) !important;
+  --section-color: hsl(278, 48%, 41%) !important;
+}
+
+[data-theme='light'] .theme-entradas,
+[data-theme='light'].theme-entradas {
+  --md-sys-color-primary: hsl(106, 74%, 43%) !important;
+  --md-sys-color-primary-container: hsl(106, 74%, 93%) !important;
+  --md-sys-color-on-primary-container: hsl(106, 74%, 38%) !important;
+  --section-color: hsl(106, 74%, 43%) !important;
+}
+
+[data-theme='light'] .theme-reserva,
+[data-theme='light'].theme-reserva {
+  --md-sys-color-primary: hsl(197, 100%, 48%) !important;
+  --md-sys-color-primary-container: hsl(197, 100%, 93%) !important;
+  --md-sys-color-on-primary-container: hsl(197, 100%, 38%) !important;
+  --section-color: hsl(197, 100%, 48%) !important;
+}
+
+/* --- CALIBRAÇÃO DAS CORES DE SEÇÕES (MODO ESCURO) --- */
+[data-theme='dark'] .theme-dashboard,
+[data-theme='dark'] .theme-extrato,
+[data-theme='dark'].theme-dashboard,
+[data-theme='dark'].theme-extrato {
+  --md-sys-color-primary: hsl(53, 85%, 54%) !important;
+  --md-sys-color-primary-container: hsl(53, 85%, 25%) !important;
+  --md-sys-color-on-primary-container: hsl(53, 85%, 80%) !important;
+  --section-color: hsl(53, 85%, 54%) !important;
+}
+
+[data-theme='dark'] .theme-fixos,
+[data-theme='dark'].theme-fixos {
+  --md-sys-color-primary: hsl(5, 100%, 56%) !important;
+  --md-sys-color-primary-container: hsl(5, 100%, 25%) !important;
+  --md-sys-color-on-primary-container: hsl(5, 100%, 95%) !important;
+  --section-color: hsl(5, 100%, 56%) !important;
+}
+
+[data-theme='dark'] .theme-diarios,
+[data-theme='dark'].theme-diarios {
+  --md-sys-color-primary: hsl(28, 90%, 55%) !important;
+  --md-sys-color-primary-container: hsl(28, 90%, 25%) !important;
+  --md-sys-color-on-primary-container: hsl(28, 90%, 95%) !important;
+  --section-color: hsl(28, 90%, 55%) !important;
+}
+
+[data-theme='dark'] .theme-parcelas,
+[data-theme='dark'].theme-parcelas {
+  --md-sys-color-primary: hsl(278, 53%, 61%) !important;
+  --md-sys-color-primary-container: hsl(278, 53%, 25%) !important;
+  --md-sys-color-on-primary-container: hsl(278, 53%, 95%) !important;
+  --section-color: hsl(278, 53%, 61%) !important;
+}
+
+[data-theme='dark'] .theme-entradas,
+[data-theme='dark'].theme-entradas {
+  --md-sys-color-primary: hsl(106, 64%, 38%) !important;
+  --md-sys-color-primary-container: hsl(106, 64%, 20%) !important;
+  --md-sys-color-on-primary-container: hsl(106, 64%, 93%) !important;
+  --section-color: hsl(106, 64%, 38%) !important;
+}
+
+[data-theme='dark'] .theme-reserva,
+[data-theme='dark'].theme-reserva {
+  --md-sys-color-primary: hsl(197, 100%, 58%) !important;
+  --md-sys-color-primary-container: hsl(197, 100%, 22%) !important;
+  --md-sys-color-on-primary-container: hsl(197, 100%, 95%) !important;
+  --section-color: hsl(197, 100%, 58%) !important;
+}

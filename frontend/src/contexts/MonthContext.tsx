@@ -15,8 +15,8 @@ interface MonthContextType {
 
 const MonthContext = createContext<MonthContextType | undefined>(undefined);
 
-const SESSION_KEY_DAY = 'blaise_selected_day';
-const SESSION_KEY_MONTH = 'blaise_selected_month';
+const SESSION_KEY_DAY = 'dinx_selected_day';
+const SESSION_KEY_MONTH = 'dinx_selected_month';
 
 function getInitialDay(): number {
   const today = new Date();

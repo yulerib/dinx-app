@@ -14,6 +14,7 @@ export interface RegistroGastoFixo {
   valor_previsto_ajustado: number | null;
   valor_real: number;
   dia_pagamento_real: number | null;
+  data_pagamento_real: string | null;
   created_at: string;
 }
 
@@ -82,7 +83,7 @@ export interface Entrada {
   mes_ano_fim: string | null;
   data_entrada: string; // YYYY-MM-DD
   ativo: boolean;
-  desvio_competencia: number;
+  desvio_competencia?: number; // Mantido para compatibilidade com o banco, não usado na UI
   created_at: string;
 }
 
@@ -96,6 +97,19 @@ export interface RegistroEntrada {
 
 export interface EntradaMensal extends Entrada {
   registro_atual: RegistroEntrada | null;
+}
+
+// --- Salário ---
+
+export interface Salario {
+  id: string;
+  mes_ano: string;              // YYYY-MM — mês de referência/competência do salário
+  valor_previsto: number;
+  dia_previsto: number | null;  // Dia do depósito previsto
+  desvio_mes_deposito: number;  // 0 = mesmo mês, 1 = mês seguinte, -1 = mês anterior, etc.
+  valor_real: number | null;    // Valor real recebido
+  data_real: string | null;     // Data real do recebimento (YYYY-MM-DD)
+  created_at: string;
 }
 
 // --- Pagamento de Faturas ---
@@ -124,6 +138,7 @@ export interface MovimentacaoReserva {
   gerar_saldo_devedor: boolean;
   quitar_saldo_devedor: boolean;
   ativo: boolean;
+  reposto?: boolean;
   created_at: string;
 }
 
@@ -136,10 +151,21 @@ export interface RegistroMovimentacaoReserva {
   afeta_conta_geral: boolean;
   gerar_saldo_devedor: boolean;
   quitar_saldo_devedor: boolean;
+  reposto?: boolean;
   created_at: string;
 }
 
 export interface MovimentacaoReservaMensal extends MovimentacaoReserva {
   registro_atual: RegistroMovimentacaoReserva | null;
 }
+
+// --- Observações / Anotações ---
+export interface Observacao {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  created_at: string;
+  updated_at: string;
+}
+
 

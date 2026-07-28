@@ -78,37 +78,14 @@
     align-items: stretch !important;
     gap: 0.75rem !important;
     padding: 1.25rem 1rem !important;
-    background-color: rgba(13, 13, 13, 0.4); /* Fundo de card sutil */
+    background-color: rgba(14, 25, 20, 0.4); /* Fundo de card sutil */
     margin-bottom: 0.75rem !important;
     border: 1px solid var(--border-color) !important;
     border-radius: var(--radius-md) !important;
   }
-
-  [data-theme='light'] .transaction-list-item {
-    background-color: rgba(255, 255, 243, 0.95) !important;
-    border: 2px solid var(--border-color) !important;
-    box-shadow: var(--shadow-sm) !important;
-  }
   
   .transaction-list-item:hover {
-    background-color: rgba(13, 13, 13, 0.6);
-  }
-
-  [data-theme='light'] .transaction-list-item:hover {
-    background-color: rgba(255, 255, 243, 1.0) !important;
-    box-shadow: var(--shadow-md) !important;
-  }
-
-  [data-theme='light'] .tli-values {
-    background: rgba(0, 0, 0, 0.04) !important;
-  }
-
-  [data-theme='light'] .tli-installment-total-box {
-    background: rgba(0, 0, 0, 0.04) !important;
-  }
-
-  [data-theme='light'] .tli-installment-bottom-row {
-    border-top: 1px dashed rgba(0, 0, 0, 0.1) !important;
+    background-color: rgba(14, 25, 20, 0.6);
   }
 
   .tli-header-row {

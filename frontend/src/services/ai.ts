@@ -3,6 +3,7 @@ import type { FunctionDeclaration } from "@google/generative-ai";
 import { gastosFixosService } from "./gastosFixos";
 import { gastosDiariosService } from "./gastosDiarios";
 import { parcelasService } from "./parcelas";
+import { entradasService } from "./entradas";
 
 // Cache em memória da chave para evitar requisições repetidas ao Supabase
 let cachedDbApiKey: string | null = null;
@@ -262,6 +263,75 @@ export const aiTools: FunctionDeclaration[] = [
       type: SchemaType.OBJECT,
       properties: {}
     }
+  },
+  
+  // Entradas (Incomes)
+  {
+    name: "adicionarEntrada",
+    description: "Cadastra uma nova entrada de receita pontual ou recorrente (freelance, aluguel recebido, etc.). Não use para salário — o salário tem gestão própria no app.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        descricao: { type: SchemaType.STRING, description: "Descrição ou nome da receita (ex: 'Freelance', 'Aluguel recebido')" },
+        valor_previsto_base: { type: SchemaType.NUMBER, description: "Valor previsto base" },
+        projetar: { type: SchemaType.BOOLEAN, description: "Se a receita se repetirá mensalmente (true) ou se é pontual/única (false)" },
+        data_entrada: { type: SchemaType.STRING, description: "Data de recebimento ou início da recorrência no formato YYYY-MM-DD" },
+        mes_ano_fim: { type: SchemaType.STRING, description: "Mês final de recorrência no formato YYYY-MM (opcional, só se projetar=true)" }
+      },
+      required: ["descricao", "valor_previsto_base", "projetar", "data_entrada"]
+    }
+  },
+  {
+    name: "editarEntrada",
+    description: "Modifica uma receita cadastrada.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        id: { type: SchemaType.STRING, description: "ID da receita" },
+        descricao: { type: SchemaType.STRING, description: "Nova descrição (opcional)" },
+        valor_previsto_base: { type: SchemaType.NUMBER, description: "Novo valor previsto base (opcional)" },
+        projetar: { type: SchemaType.BOOLEAN, description: "Nova configuração de projeção (opcional)" },
+        data_entrada: { type: SchemaType.STRING, description: "Nova data de recebimento/início (YYYY-MM-DD) (opcional)" },
+        mes_ano_fim: { type: SchemaType.STRING, description: "Novo mês final (YYYY-MM) (opcional/pode ser null)" },
+        ativo: { type: SchemaType.BOOLEAN, description: "Status ativo/inativo (opcional)" }
+      },
+      required: ["id"]
+    }
+  },
+  {
+    name: "apagarEntrada",
+    description: "Remove permanentemente uma receita cadastrada.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        id: { type: SchemaType.STRING, description: "ID da receita" }
+      },
+      required: ["id"]
+    }
+  },
+  {
+    name: "receberEntrada",
+    description: "Registra o valor real de receita efetivamente recebido em um mês específico.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        id_entrada: { type: SchemaType.STRING, description: "ID da receita" },
+        mes_ano: { type: SchemaType.STRING, description: "Mês e ano no formato YYYY-MM" },
+        valor_real: { type: SchemaType.NUMBER, description: "Valor real recebido" }
+      },
+      required: ["id_entrada", "mes_ano", "valor_real"]
+    }
+  },
+  {
+    name: "consultarEntradasMensais",
+    description: "Busca as receitas previstas e reais de um mês específico para responder perguntas analíticas sobre o histórico de entradas.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        mes_ano: { type: SchemaType.STRING, description: "Mês e ano no formato YYYY-MM" }
+      },
+      required: ["mes_ano"]
+    }
   }
 ];
 
@@ -296,6 +366,20 @@ export async function executeAiTool(name: string, args: any) {
         return results;
       }
       case "consultarFaturasPassadas": return await parcelasService.fetchTodasParcelas();
+      case "adicionarEntrada": return await entradasService.addEntrada({
+        descricao: args.descricao,
+        valor_previsto_base: args.valor_previsto_base,
+        projetar: args.projetar,
+        data_entrada: args.data_entrada,
+        mes_ano_fim: args.mes_ano_fim || null
+      });
+      case "editarEntrada": {
+        const { id, ...updates } = args;
+        return await entradasService.updateEntrada(id, updates);
+      }
+      case "apagarEntrada": await entradasService.deleteEntrada(args.id); return { success: true };
+      case "receberEntrada": return await entradasService.upsertRegistroEntrada(args.id_entrada, args.mes_ano, args.valor_real);
+      case "consultarEntradasMensais": return await entradasService.fetchEntradasMensais(args.mes_ano);
       default: throw new Error(`Ferramenta "${name}" não encontrada.`);
     }
   } catch (err: any) {
@@ -345,8 +429,14 @@ export async function sendMessageWithFallback(
           if (!call.name.startsWith('consultar')) {
             toolResults.push({ name: call.name, changed: true });
           }
+          // O Gemini exige que a resposta da função seja um objeto JSON (Struct), não um array ou primitivo.
+          // Se for array, null ou primitivo, envelopamos em um objeto { result: ... }
+          const wrappedResponse = (apiResponse && typeof apiResponse === 'object' && !Array.isArray(apiResponse))
+            ? apiResponse
+            : { result: apiResponse };
+
           functionResponses.push({
-            functionResponse: { name: call.name, response: apiResponse }
+            functionResponse: { name: call.name, response: wrappedResponse }
           });
         }
         const nextResult = await chat.sendMessage(functionResponses as any);
@@ -379,6 +469,7 @@ export async function getCurrentContextSnapshot(mesAno: string, dataIso: string)
   const cats = await gastosDiariosService.fetchCategoriasComRegistroDia(dataIso);
   const parcelas = await parcelasService.fetchTodasParcelas();
   const registrosMes = await gastosDiariosService.fetchRegistrosDoMes(mesAno);
+  const entradas = await entradasService.fetchEntradasMensais(mesAno);
 
   // Agrupa gastos do mês por categoria
   const gastosMesPorCategoria: Record<string, number> = {};
@@ -406,6 +497,17 @@ export async function getCurrentContextSnapshot(mesAno: string, dataIso: string)
     })),
     configuracao_global: config,
     compras_parceladas: parcelas,
+    entradas_do_mes: entradas.map((e: any) => ({
+      id: e.id,
+      descricao: e.descricao,
+      valor_previsto: e.valor_previsto_base,
+      projetar: e.projetar,
+      data_entrada: e.data_entrada,
+      mes_ano_fim: e.mes_ano_fim,
+      ativo: e.ativo,
+      valor_real: e.registro_atual?.valor_real || 0,
+      recebido: !!e.registro_atual
+    })),
     categorias_diarias: cats.map((c: any) => ({
       id: c.id,
       nome: c.nome,

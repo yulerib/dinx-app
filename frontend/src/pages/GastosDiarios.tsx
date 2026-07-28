@@ -6,7 +6,7 @@ import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { BalanceProgressBar } from '../components/ui/BalanceProgressBar';
 import { WarningTooltip } from '../components/ui/WarningTooltip';
 import { TransactionListItem } from '../components/ui/TransactionListItem';
-import { Plus, Check, Loader2, Zap, Trash2, ListPlus, Edit2 } from 'lucide-react';
+import { Plus, Check, Loader2, Zap, Trash2, ListPlus, Edit2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { gastosDiariosService } from '../services/gastosDiarios';
 import { chartsService } from '../services/charts';
@@ -15,7 +15,7 @@ import type { CategoriaComRegistroDiario, RegistroDiario } from '../types/databa
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
 export function GastosDiarios() {
-  const { currentMonth, selectedDay } = useMonth();
+  const { currentMonth, selectedDay, nextDay, prevDay, goToToday } = useMonth();
   const year = currentMonth.getFullYear();
   const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
   const mesAno = `${year}-${month}`;
@@ -498,9 +498,68 @@ export function GastosDiarios() {
 
   return (
     <div className="theme-diarios">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h1 className="text-h1" style={{ marginBottom: 0 }}>Gastos Diários</h1>
-        <Button onClick={handleOpenNewCat} icon={<Plus size={16} />}>Nova Categoria</Button>
+      <div className="diarios-header-container">
+        {/* Lado esquerdo no desktop / Linha 1 no mobile */}
+        <div className="diarios-title-section">
+          <h1 className="text-h1" style={{ marginBottom: 0 }}>Gastos Diários</h1>
+        </div>
+
+        {/* Linha 2 no mobile (Hoje e Dia Selector) / Meio no desktop */}
+        <div className="diarios-controls-section">
+          {/* Botão Hoje */}
+          <div className="diarios-today-container">
+            <button 
+              onClick={goToToday}
+              style={{
+                alignItems: 'center',
+                gap: '0.4rem',
+                backgroundColor: 'var(--primary)',
+                color: '#fff',
+                border: '2px solid var(--border-color)',
+                borderRadius: '50px',
+                padding: '0.45rem 1.1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-sm)',
+                fontSize: '0.875rem',
+                height: '40px',
+                transition: 'all 0.2s',
+                display: 'inline-flex'
+              }}
+            >
+              <Calendar size={16} />
+              <span>Hoje</span>
+            </button>
+          </div>
+
+          {/* Seletor de Dia */}
+          <div className="diarios-day-container">
+            <div 
+              className="global-day-selector"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.75rem', 
+                backgroundColor: 'var(--color-main)', 
+                padding: '0.35rem 0.85rem', 
+                borderRadius: '50px', 
+                border: '2px solid #141816', 
+                boxShadow: 'var(--shadow-sm)',
+                color: '#141816',
+                height: '40px'
+              }}
+            >
+              <button onClick={prevDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
+              <span style={{ fontWeight: 700, minWidth: '55px', textAlign: 'center', color: '#141816', fontSize: '0.9rem', userSelect: 'none' }}>Dia {String(selectedDay).padStart(2, '0')}</span>
+              <button onClick={nextDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            </div>
+          </div>
+        </div>
+
+        {/* Lado direito no desktop / Linha 1 direita no mobile */}
+        <div className="diarios-action-section">
+          <Button onClick={handleOpenNewCat} icon={<Plus size={16} />}>Nova Categoria</Button>
+        </div>
       </div>
 
       {/* Resumo Global (Sempre Visível) */}
@@ -526,6 +585,72 @@ export function GastosDiarios() {
 
       {/* Abas */}
       <style>{`
+        .diarios-header-container {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          width: 100%;
+        }
+
+        .diarios-controls-section {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .diarios-title-section {
+          display: flex;
+          align-items: center;
+        }
+
+        .diarios-action-section {
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        @media (max-width: 768px) {
+          .diarios-header-container {
+            display: grid !important;
+            grid-template-columns: 1fr auto !important;
+            gap: 1rem 0.5rem !important;
+            align-items: center !important;
+            width: 100% !important;
+          }
+          
+          .diarios-title-section {
+            grid-column: 1;
+            grid-row: 1;
+          }
+          
+          .diarios-action-section {
+            grid-column: 2;
+            grid-row: 1;
+            display: flex;
+            justify-content: flex-end;
+          }
+          
+          .diarios-controls-section {
+            grid-column: 1 / span 2;
+            grid-row: 2;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            width: 100% !important;
+            gap: 0 !important;
+          }
+          
+          .diarios-today-container {
+            display: flex;
+            justify-content: flex-start;
+          }
+          
+          .diarios-day-container {
+            display: flex;
+            justify-content: flex-end;
+          }
+        }
+
         .scrollable-tabs {
           display: flex;
           gap: 1rem;
