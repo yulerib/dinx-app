@@ -383,21 +383,12 @@ export function Dashboard() {
       setReservaPrevistoIn(calcReservaPrevIn);
       setReservaPrevistoOut(calcReservaPrevOut);
 
-      // Calcula o total acumulado de salários até hoje
+      // Calcula o total acumulado de salários até hoje (apenas salários recebidos)
       let totalSalariosInflow = 0;
       (allSalariosDb || []).forEach((s: any) => {
         if (s.valor_real !== null && s.valor_real !== undefined) {
           if (s.data_real && s.data_real <= todayIso) {
             totalSalariosInflow += Number(s.valor_real);
-          }
-        } else if (s.valor_previsto > 0) {
-          const desvio = s.desvio_mes_deposito ?? 0;
-          const [y, m] = s.mes_ano.split('-').map(Number);
-          const dateDep = new Date(y, m - 1 + desvio, s.dia_previsto || 5);
-          const dateDepIso = `${dateDep.getFullYear()}-${String(dateDep.getMonth() + 1).padStart(2, '0')}-${String(dateDep.getDate()).padStart(2, '0')}`;
-          
-          if (dateDepIso <= todayIso) {
-            totalSalariosInflow += Number(s.valor_previsto);
           }
         }
       });
