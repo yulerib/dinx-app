@@ -13,7 +13,7 @@ import { gastosDiariosService } from '../services/gastosDiarios';
 import { parcelasService } from '../services/parcelas';
 import { entradasService } from '../services/entradas';
 import { chartsService } from '../services/charts';
-import type { DailyCalendarPoint, DailyCalendarItem, MonthlyPerformancePoint } from '../services/charts';
+import type { DailyCalendarPoint, MonthlyPerformancePoint } from '../services/charts';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { supabase } from '../lib/supabase';
 
