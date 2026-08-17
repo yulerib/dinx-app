@@ -1,0 +1,446 @@
+/* ==========================================================================
+   SIMULAÇÕES PAGE STYLES - MATERIAL 3 PREMIUM DESKTOP & MOBILE UX
+   ========================================================================== */
+
+.sim-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 5rem;
+}
+
+/* Header & Actions */
+.sim-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.sim-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Metric Cards Grid */
+.sim-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+
+.sim-metric-card {
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sim-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+.sim-metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.sim-metric-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.sim-metric-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 0.2rem 0;
+  line-height: 1.2;
+}
+
+.sim-metric-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  width: fit-content;
+  margin-top: 0.25rem;
+}
+
+.sim-diff-positive {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-verde-entradas, #10b981);
+}
+
+.sim-diff-negative {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-vermelho-fixos, #ef4444);
+}
+
+.sim-diff-neutral {
+  background: var(--bg-muted, #f1f5f9);
+  color: var(--text-muted, #64748b);
+}
+
+/* Mobile Segmented Switcher */
+.sim-mobile-switcher {
+  display: none;
+  background: var(--bg-muted, #f1f5f9);
+  padding: 0.25rem;
+  border-radius: 10px;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.sim-mobile-switch-btn {
+  flex: 1;
+  padding: 0.65rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: all 0.2s;
+}
+
+.sim-mobile-switch-btn.active {
+  background: var(--bg-card, #ffffff);
+  color: var(--primary, #3b82f6);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Two Column Layout for Main Visuals & Editor */
+.sim-main-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* Timeline Card */
+.sim-table-card {
+  padding: 1.25rem;
+  border-radius: 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.sim-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.sim-day-card {
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.sim-day-card:hover {
+  background: rgba(99, 102, 241, 0.04);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.sim-day-card:active {
+  transform: scale(0.99);
+}
+
+.sim-day-card.is-today {
+  border-left: 4px solid var(--primary) !important;
+  background: rgba(99, 102, 241, 0.03);
+}
+
+.sim-day-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sim-day-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--bg-muted, #f1f5f9);
+  color: var(--text-color);
+}
+
+.sim-day-pill .day-num {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sim-day-pill .day-wk {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sim-day-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sim-chip {
+  font-size: 0.725rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.sim-day-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.sim-day-balance {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* Manager Panel */
+.sim-manager-card {
+  padding: 1.25rem;
+  border-radius: 12px;
+  background: var(--bg-card, #ffffff);
+  border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.sim-manager-tabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  background: var(--bg-muted, #f1f5f9);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.sim-tab-btn {
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.sim-tab-btn.active {
+  background: var(--bg-card, #ffffff);
+  color: var(--primary, #3b82f6);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.sim-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* Item Row */
+.sim-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  background: var(--bg-muted, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  gap: 0.75rem;
+  transition: all 0.2s;
+}
+
+.sim-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.sim-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sim-item-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.sim-badge-locked {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--text-muted, #64748b);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.sim-badge-simulated {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--primary, #3b82f6);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.sim-badge-custom {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.sim-item-details {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+}
+
+.sim-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sim-input-day {
+  width: 48px;
+  padding: 0.35rem 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  background: var(--bg-card);
+  color: var(--text-color);
+}
+
+.sim-input-currency-wrapper {
+  min-width: 125px;
+  width: 135px;
+}
+
+/* Floating Action Button (Mobile) */
+.sim-fab {
+  display: none;
+  position: fixed;
+  bottom: 5rem;
+  right: 1.25rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--primary, #3b82f6);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 40;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sim-fab:active {
+  transform: scale(0.92);
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+  .sim-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .sim-header-row {
+    margin-bottom: 0.25rem;
+  }
+
+  .sim-mobile-switcher {
+    display: flex;
+  }
+
+  .sim-fab {
+    display: flex;
+  }
+
+  .sim-metric-value {
+    font-size: 1.3rem;
+  }
+
+  .sim-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+  }
+
+  .sim-input-currency-wrapper {
+    min-width: 110px;
+    width: 115px;
+  }
+}

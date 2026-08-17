@@ -10,6 +10,7 @@ import { Extrato } from './pages/Extrato';
 import { Assistente } from './pages/Assistente';
 import { Reserva } from './pages/Reserva';
 import { Observacoes } from './pages/Observacoes';
+import { Simulacoes } from './pages/Simulacoes';
 import { MonthProvider } from './contexts/MonthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Login } from './pages/Login';
@@ -53,6 +54,7 @@ function App() {
               <Route path="fixos" element={<GastosFixos />} />
               <Route path="diarios" element={<GastosDiarios />} />
               <Route path="cartao-credito" element={<CartaoCredito />} />
+              <Route path="simulacoes" element={<Simulacoes />} />
               <Route path="extrato" element={<Extrato />} />
               <Route path="reserva" element={<Reserva />} />
               <Route path="assistente" element={<Assistente />} />

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CalendarDays, CreditCard, Bot, ArrowUpRight, FileText, LogOut, PiggyBank, StickyNote, MoreHorizontal, X } from 'lucide-react';
+import { LayoutDashboard, Wallet, CalendarDays, CreditCard, Bot, ArrowUpRight, FileText, LogOut, PiggyBank, StickyNote, MoreHorizontal, X, Sparkles } from 'lucide-react';
 import { MonthSelector } from '../ui/MonthSelector';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { GapCheckerModal } from '../ui/GapCheckerModal';
@@ -21,6 +21,7 @@ export function Layout() {
     { to: '/fixos', label: 'Gastos Fixos', icon: <M3Icon name="account_balance_wallet" lucideIcon={<Wallet size={20} />} /> },
     { to: '/diarios', label: 'Gastos Diários', icon: <M3Icon name="calendar_today" lucideIcon={<CalendarDays size={20} />} /> },
     { to: '/cartao-credito', label: 'Cartão de Crédito', icon: <M3Icon name="credit_card" lucideIcon={<CreditCard size={20} />} /> },
+    { to: '/simulacoes', label: 'Simulações', icon: <M3Icon name="science" lucideIcon={<Sparkles size={20} />} /> },
     { to: '/extrato', label: 'Extrato', icon: <M3Icon name="receipt_long" lucideIcon={<FileText size={20} />} /> },
     { to: '/reserva', label: 'Reserva', icon: <M3Icon name="savings" lucideIcon={<PiggyBank size={20} />} /> },
     { to: '/observacoes', label: 'Observações', icon: <M3Icon name="sticky_note" lucideIcon={<StickyNote size={20} />} /> },
