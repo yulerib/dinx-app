@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { BalanceProgressBar } from '../components/ui/BalanceProgressBar';
 import { AIPromptArea } from '../components/ui/AIPromptArea';
@@ -6,14 +6,14 @@ import { StatCard } from '../components/ui/StatCard';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Link } from 'react-router-dom';
-import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown, Loader2, PiggyBank, Eye } from 'lucide-react';
+import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown, Loader2, PiggyBank } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { gastosFixosService } from '../services/gastosFixos';
 import { gastosDiariosService } from '../services/gastosDiarios';
 import { parcelasService } from '../services/parcelas';
 import { entradasService } from '../services/entradas';
 import { chartsService } from '../services/charts';
-import type { DailyCalendarPoint, MonthlyPerformancePoint } from '../services/charts';
+import type { MonthlyPerformancePoint } from '../services/charts';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { supabase } from '../lib/supabase';
 
@@ -25,57 +25,7 @@ export function Dashboard() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [calendarData, setCalendarData] = useState<DailyCalendarPoint[]>([]);
   const [monthlyChartData, setMonthlyChartData] = useState<MonthlyPerformancePoint[]>([]);
-  const [activeTab, setActiveTab] = useState<'visaoFuturo' | 'monthly'>('visaoFuturo');
-  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
-  const [selectedMobileDay, setSelectedMobileDay] = useState<number | null>(null);
-
-  // Detectar mobile
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Ref e Estados para Rolagem Vertical da Tabela
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [scrollVal, setScrollVal] = useState(0);
-  const [maxScroll, setMaxScroll] = useState(0);
-
-  const handleScroll = () => {
-    if (tableContainerRef.current) {
-      setScrollVal(tableContainerRef.current.scrollTop);
-    }
-  };
-
-  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = Number(e.target.value);
-    setScrollVal(val);
-    if (tableContainerRef.current) {
-      tableContainerRef.current.scrollTop = val;
-    }
-  };
-
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-
-    const timer = setTimeout(() => {
-      setMaxScroll(el.scrollHeight - el.clientHeight);
-    }, 150);
-
-    const handleResize = () => {
-      setMaxScroll(el.scrollHeight - el.clientHeight);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [calendarData, activeTab]);
 
   // Totais de todos os tempos (Saldo da Conta)
   const [saldoConta, setSaldoConta] = useState(0);
@@ -407,12 +357,8 @@ export function Dashboard() {
 
       setSaldoConta(totalInflows + totalReservaInflows - totalOutflows - totalReservaOutflows);
 
-      // 6. Buscar dados do calendário financeiro e desempenho mensal
-      const [calData, mData] = await Promise.all([
-        chartsService.getDailyCalendarData(currentMonth),
-        chartsService.getMonthlyPerformance(currentMonth)
-      ]);
-      setCalendarData(calData);
+      // 6. Buscar dados de desempenho mensal
+      const mData = await chartsService.getMonthlyPerformance(currentMonth);
       setMonthlyChartData(mData);
 
     } catch (error) {
@@ -522,419 +468,67 @@ export function Dashboard() {
             </Card>
           </div>
 
-          {/* ----------------- ANÁLISE FINANCEIRA (DUAL TABS: VISÃO DO FUTURO & DESEMPENHO MENSAL) ----------------- */}
+          {/* ----------------- DESEMPENHO MENSAL (GRÁFICO RECEITAS VS DESPESAS) ----------------- */}
           <Card style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid var(--border-color)' }}>
-            <style>{`
-              .vf-table-container::-webkit-scrollbar { display: none; }
-              .vf-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8rem; }
-              .vf-table thead { position: sticky; top: 0; z-index: 2; }
-              .vf-table th { background: var(--bg-card, #fff); border-bottom: 2px solid var(--border-color); padding: 0.5rem 0.625rem; text-align: right; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); white-space: nowrap; }
-              .vf-table th:first-child { text-align: center; width: 42px; }
-              .vf-table td { padding: 0.4rem 0.625rem; border-bottom: 1px solid var(--border-color); text-align: right; white-space: nowrap; transition: background 0.15s; }
-              .vf-table td:first-child { text-align: center; font-weight: 600; color: var(--text-muted); font-size: 0.75rem; }
-              .vf-table tbody tr:hover td { background: rgba(99, 102, 241, 0.03); }
-              .vf-row-today td { border-left: 3px solid var(--primary) !important; background: rgba(99, 102, 241, 0.04) !important; }
-              .vf-row-today td:first-child { border-left: 3px solid var(--primary) !important; }
-              .vf-val-previsto { opacity: 0.6; font-style: italic; }
-              .vf-val-executado { font-weight: 600; opacity: 1; }
-              .vf-tooltip { position: absolute; z-index: 10; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem; box-shadow: var(--shadow-lg); min-width: 220px; max-width: 320px; pointer-events: none; font-size: 0.8rem; }
-              .vf-tooltip-item { display: flex; justify-content: space-between; gap: 1rem; padding: 0.15rem 0; }
-              .vf-tooltip-item-exec { font-weight: 600; }
-              .vf-tooltip-item-prev { opacity: 0.6; font-style: italic; }
-              .vf-slider-vertical { writing-mode: vertical-lr; width: 8px; height: 100%; max-height: 380px; accent-color: var(--primary); cursor: pointer; border-radius: 4px; border: none; outline: none; background: var(--border-color); }
-
-              /* --- MOBILE: tabela simplificada --- */
-              .vf-desktop-view { display: flex; }
-              .vf-mobile-view { display: none; }
-              .vf-mobile-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.95rem; }
-              .vf-mobile-table th { background: var(--bg-card, #fff); border-bottom: 2px solid var(--border-color); padding: 0.6rem 0.75rem; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
-              .vf-mobile-table th:first-child { text-align: center; width: 50px; }
-              .vf-mobile-table th:last-child { text-align: right; }
-              .vf-mobile-table td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border-color); transition: background 0.15s; cursor: pointer; }
-              .vf-mobile-table td:first-child { text-align: center; font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
-              .vf-mobile-table td:last-child { text-align: right; font-weight: 700; font-size: 0.95rem; }
-              .vf-mobile-table tbody tr:active td { background: rgba(99, 102, 241, 0.06); }
-              .vf-mobile-table .vf-row-today td { border-left: 3px solid var(--primary) !important; background: rgba(99, 102, 241, 0.04); }
-              .vf-mobile-row-has-items td:last-child::after { content: ' \\203A'; font-size: 1.1rem; color: var(--text-muted); margin-left: 0.25rem; }
-
-              /* Modal detail items on mobile */
-              .vf-modal-section { margin-bottom: 1rem; }
-              .vf-modal-section-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); }
-              .vf-modal-item { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.35rem 0; font-size: 0.9rem; }
-              .vf-modal-item-exec { font-weight: 600; }
-              .vf-modal-item-prev { opacity: 0.6; font-style: italic; }
-              .vf-modal-summary { display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 0; border-top: 2px solid var(--border-color); margin-top: 0.5rem; font-size: 1rem; font-weight: 700; }
-
-              @media (max-width: 768px) {
-                .vf-table { font-size: 0.7rem; }
-                .vf-table th, .vf-table td { padding: 0.3rem 0.4rem; }
-                .vf-col-reserva { display: none; }
-                .vf-desktop-view { display: none !important; }
-                .vf-mobile-view { display: block !important; }
-              }
-            `}</style>
-
-            {/* Header com Abas */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-              <h2 className="text-h2" style={{ margin: 0, fontSize: '1.25rem' }}>Análise Financeira</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h2 className="text-h2" style={{ margin: 0, fontSize: '1.25rem' }}>Desempenho Mensal</h2>
               
-              <div style={{ display: 'flex', gap: '0.5rem', backgroundColor: 'var(--bg-muted, #f1f5f9)', padding: '0.25rem', borderRadius: '8px' }}>
-                <button
-                  onClick={() => setActiveTab('visaoFuturo')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    padding: '0.375rem 0.75rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    backgroundColor: activeTab === 'visaoFuturo' ? 'var(--bg-card, #ffffff)' : 'transparent',
-                    color: activeTab === 'visaoFuturo' ? 'var(--primary, #3b82f6)' : 'var(--text-muted, #64748b)',
-                    boxShadow: activeTab === 'visaoFuturo' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <Eye size={16} />
-                  Visão do Futuro
-                </button>
-                <button
-                  onClick={() => setActiveTab('monthly')}
-                  style={{
-                    padding: '0.375rem 0.75rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    backgroundColor: activeTab === 'monthly' ? 'var(--bg-card, #ffffff)' : 'transparent',
-                    color: activeTab === 'monthly' ? 'var(--text-color, #1e293b)' : 'var(--text-muted, #64748b)',
-                    boxShadow: activeTab === 'monthly' ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Desempenho Mensal
-                </button>
+              <div style={{ display: 'flex', gap: '1.25rem', fontSize: '12px', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-verde-entradas)' }}></div>
+                  <span>Receitas</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-vermelho-fixos)' }}></div>
+                  <span>Despesas</span>
+                </div>
               </div>
             </div>
 
-            {/* ABA 1: VISÃO DO FUTURO */}
-            {activeTab === 'visaoFuturo' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <span style={{ fontWeight: 600, opacity: 1 }}>●</span>
-                    <span>Executado</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <span style={{ opacity: 0.5, fontStyle: 'italic' }}>○</span>
-                    <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Previsto</span>
-                  </div>
-                </div>
-
-                <div className="vf-desktop-view" style={{ gap: '0.75rem', alignItems: 'stretch', position: 'relative' }}>
-                  {/* Tabela Principal */}
-                  <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-                    <div ref={!isMobile ? tableContainerRef : undefined} onScroll={!isMobile ? handleScroll : undefined} className="vf-table-container" style={{ maxHeight: 380, overflowY: 'auto', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                      <table className="vf-table">
-                        <thead>
-                          <tr>
-                            <th>Dia</th>
-                            <th style={{ color: 'var(--color-verde-entradas)' }}>Entradas</th>
-                            <th style={{ color: 'var(--color-vermelho-fixos)' }}>Saídas Fixas</th>
-                            <th style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>Saídas Diárias</th>
-                            <th style={{ color: 'var(--primary)' }}>Saldo Conta</th>
-                            <th className="vf-col-reserva">Reserva</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {calendarData.map((point) => {
-                            const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
-                            const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
-                            let saldoColor = 'var(--color-verde-entradas)';
-                            if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
-                            else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
-                            else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
-
-                            const hasEntradas = point.totalEntradas > 0;
-                            const hasSaidasFixas = point.totalSaidasFixas > 0;
-                            const hasSaidasDiarias = point.totalSaidasDiarias > 0;
-                            const allEntradasExec = point.entradas.length > 0 && point.entradas.every(i => i.isExecutado);
-                            const allFixasExec = point.saidasFixas.length > 0 && point.saidasFixas.every(i => i.isExecutado);
-                            const allDiariasExec = point.saidasDiarias.length > 0 && point.saidasDiarias.every(i => i.isExecutado);
-
-                            const renderCellValue = (total: number, hasItems: boolean, allExec: boolean, color: string) => {
-                              if (!hasItems) return <span style={{ color: 'var(--text-muted)', opacity: 0.3 }}>—</span>;
-                              return (
-                                <span className={allExec ? 'vf-val-executado' : 'vf-val-previsto'} style={{ color }}>
-                                  {formatBRL(total)}
-                                </span>
-                              );
-                            };
-
-                            return (
-                              <tr
-                                key={point.dia}
-                                className={point.isToday ? 'vf-row-today' : ''}
-                                onMouseEnter={() => setHoveredDay(point.dia)}
-                                onMouseLeave={() => setHoveredDay(null)}
-                                style={{ cursor: (point.entradas.length > 0 || point.saidasFixas.length > 0 || point.saidasDiarias.length > 0) ? 'help' : 'default' }}
-                              >
-                                <td>{point.diaFormatado}</td>
-                                <td>{renderCellValue(point.totalEntradas, hasEntradas, allEntradasExec, 'var(--color-verde-entradas)')}</td>
-                                <td>{renderCellValue(point.totalSaidasFixas, hasSaidasFixas, allFixasExec, 'var(--color-vermelho-fixos)')}</td>
-                                <td>{renderCellValue(point.totalSaidasDiarias, hasSaidasDiarias, allDiariasExec, 'var(--color-laranja-diarios, var(--warning))')}</td>
-                                <td style={{ fontWeight: 700, color: saldoColor }}>{formatBRL(point.saldoConta)}</td>
-                                <td className="vf-col-reserva" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{formatBRL(point.saldoReserva)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Tooltip */}
-                    {hoveredDay !== null && (() => {
-                      const point = calendarData.find(p => p.dia === hoveredDay);
-                      if (!point || (point.entradas.length === 0 && point.saidasFixas.length === 0 && point.saidasDiarias.length === 0)) return null;
-                      return (
-                        <div className="vf-tooltip" style={{ top: 0, right: 0, transform: 'translateY(40px)' }}>
-                          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.35rem' }}>
-                            Dia {point.diaFormatado} de {currentMonth.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })}
-                          </p>
-                          {point.entradas.length > 0 && (
-                            <div style={{ marginBottom: '0.35rem' }}>
-                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-verde-entradas)', textTransform: 'uppercase' }}>Entradas</span>
-                              {point.entradas.map((item, i) => (
-                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
-                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
-                                  <span style={{ color: 'var(--color-verde-entradas)' }}>+{formatBRL(item.valor)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {point.saidasFixas.length > 0 && (
-                            <div style={{ marginBottom: '0.35rem' }}>
-                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-vermelho-fixos)', textTransform: 'uppercase' }}>Saídas Fixas</span>
-                              {point.saidasFixas.map((item, i) => (
-                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
-                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
-                                  <span style={{ color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(item.valor)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {point.saidasDiarias.length > 0 && (
-                            <div>
-                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-laranja-diarios, var(--warning))', textTransform: 'uppercase' }}>Saídas Diárias</span>
-                              {point.saidasDiarias.map((item, i) => (
-                                <div key={i} className={`vf-tooltip-item ${item.isExecutado ? 'vf-tooltip-item-exec' : 'vf-tooltip-item-prev'}`}>
-                                  <span style={{ color: 'var(--text-muted)' }}>{item.descricao}</span>
-                                  <span style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(item.valor)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Slider Vertical na Lateral Direita */}
-                  {maxScroll > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0.25rem 0', gap: '0.5rem' }}>
-                      <input
-                        type="range"
-                        min={0}
-                        max={maxScroll}
-                        value={scrollVal}
-                        onChange={handleSliderChange}
-                        className="vf-slider-vertical"
-                        title="Rolar dias na tabela"
-                      />
-                    </div>
-                  )}
-                </div>
-
-              {/* === MOBILE VIEW === */}
-              <div className="vf-mobile-view">
-                <div ref={isMobile ? tableContainerRef : undefined} onScroll={isMobile ? handleScroll : undefined} style={{ maxHeight: 420, overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                  <table className="vf-mobile-table">
-                    <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
-                      <tr>
-                        <th>Dia</th>
-                        <th>Saldo em Conta</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {calendarData.map((point) => {
-                        const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
-                        const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
-                        let saldoColor = 'var(--color-verde-entradas)';
-                        if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
-                        else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
-                        else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
-
-                        const hasItems = point.entradas.length > 0 || point.saidasFixas.length > 0 || point.saidasDiarias.length > 0;
-
+            <div className="scrollable-chart-outer" style={{ width: '100%', height: 350, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <style>{`.scrollable-chart-outer::-webkit-scrollbar { display: none; }`}</style>
+              <div style={{ minWidth: 'max(100%, 500px)', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="mesAnoFormatado" stroke="var(--text-muted)" fontSize={12} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$ ${val}`} />
+                    <Tooltip content={({ active, payload }: any) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
                         return (
-                          <tr
-                            key={point.dia}
-                            className={`${point.isToday ? 'vf-row-today' : ''} ${hasItems ? 'vf-mobile-row-has-items' : ''}`}
-                            onClick={() => setSelectedMobileDay(point.dia)}
-                          >
-                            <td>{point.diaFormatado}</td>
-                            <td style={{ color: saldoColor }}>{formatBRL(point.saldoConta)}</td>
-                          </tr>
+                          <div style={{
+                            backgroundColor: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            boxShadow: 'var(--shadow-lg)'
+                          }}>
+                            <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.25rem' }}>
+                              {data.mesAnoFormatado}
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <p style={{ margin: 0, color: 'var(--color-verde-entradas)', fontSize: '0.875rem' }}>
+                                Receitas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.receitas)}</strong>
+                              </p>
+                              <p style={{ margin: 0, color: 'var(--color-vermelho-fixos)', fontSize: '0.875rem' }}>
+                                Despesas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.despesas)}</strong>
+                              </p>
+                              <p style={{ margin: 0, color: data.receitas - data.despesas >= 0 ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)', fontSize: '0.875rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
+                                Resultado: <span>{formatBRL(data.receitas - data.despesas)}</span>
+                              </p>
+                            </div>
+                          </div>
                         );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                      }
+                      return null;
+                    }} />
+                    <Bar name="Receitas" dataKey="receitas" fill="var(--color-verde-entradas)" radius={[4, 4, 0, 0]} maxBarSize={25} />
+                    <Bar name="Despesas" dataKey="despesas" fill="var(--color-vermelho-fixos)" radius={[4, 4, 0, 0]} maxBarSize={25} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          )}
-
-            {/* Modal de Detalhes do Dia (Mobile) */}
-            {selectedMobileDay !== null && (() => {
-              const point = calendarData.find(p => p.dia === selectedMobileDay);
-              if (!point) return null;
-              const saldoInicial = calendarData.length > 0 ? (calendarData[0].saldoConta - calendarData[0].totalEntradas + calendarData[0].totalSaidasFixas + calendarData[0].totalSaidasDiarias) : 0;
-              const saldoPct = saldoInicial > 0 ? point.saldoConta / saldoInicial : (point.saldoConta >= 0 ? 1 : -1);
-              let saldoColor = 'var(--color-verde-entradas)';
-              if (saldoPct < 0) saldoColor = 'var(--color-vermelho-fixos)';
-              else if (saldoPct < 0.05) saldoColor = 'var(--color-laranja-diarios, var(--warning))';
-              else if (saldoPct < 0.20) saldoColor = 'var(--warning)';
-
-              return (
-                <Modal isOpen={true} onClose={() => setSelectedMobileDay(null)} title={`Dia ${point.diaFormatado}`}>
-                  <div>
-                    {point.entradas.length > 0 && (
-                      <div className="vf-modal-section">
-                        <div className="vf-modal-section-title" style={{ color: 'var(--color-verde-entradas)' }}>Entradas</div>
-                        {point.entradas.map((item, i) => (
-                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
-                            <span>{item.descricao}</span>
-                            <span style={{ color: 'var(--color-verde-entradas)' }}>+{formatBRL(item.valor)}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
-                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-verde-entradas)' }}>+{formatBRL(point.totalEntradas)}</strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {point.saidasFixas.length > 0 && (
-                      <div className="vf-modal-section">
-                        <div className="vf-modal-section-title" style={{ color: 'var(--color-vermelho-fixos)' }}>Saídas Fixas</div>
-                        {point.saidasFixas.map((item, i) => (
-                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
-                            <span>{item.descricao}</span>
-                            <span style={{ color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(item.valor)}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
-                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(point.totalSaidasFixas)}</strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {point.saidasDiarias.length > 0 && (
-                      <div className="vf-modal-section">
-                        <div className="vf-modal-section-title" style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>Saídas Diárias</div>
-                        {point.saidasDiarias.map((item, i) => (
-                          <div key={i} className={`vf-modal-item ${item.isExecutado ? 'vf-modal-item-exec' : 'vf-modal-item-prev'}`}>
-                            <span>{item.descricao}</span>
-                            <span style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(item.valor)}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: '0.8rem', color: 'var(--text-muted)', paddingTop: '0.2rem' }}>
-                          Total: <strong style={{ marginLeft: '0.35rem', color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(point.totalSaidasDiarias)}</strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {point.entradas.length === 0 && point.saidasFixas.length === 0 && point.saidasDiarias.length === 0 && (
-                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0', fontSize: '0.9rem' }}>
-                        Nenhuma movimentação neste dia.
-                      </p>
-                    )}
-
-                    <div className="vf-modal-summary">
-                      <span style={{ color: 'var(--primary)' }}>Saldo em Conta</span>
-                      <span style={{ color: saldoColor }}>{formatBRL(point.saldoConta)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', paddingTop: '0.25rem' }}>
-                      <span>Reserva</span>
-                      <span>{formatBRL(point.saldoReserva)}</span>
-                    </div>
-                  </div>
-                </Modal>
-              );
-            })()}
-
-            {/* ABA 2: DESEMPENHO MENSAL */}
-            {activeTab === 'monthly' && (
-              <div>
-                <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '0.75rem', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-verde-entradas)' }}></div>
-                    <span>Receitas</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-vermelho-fixos)' }}></div>
-                    <span>Despesas</span>
-                  </div>
-                </div>
-
-                <div className="scrollable-chart-outer" style={{ width: '100%', height: 350, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                  <style>{`.scrollable-chart-outer::-webkit-scrollbar { display: none; }`}</style>
-                  <div style={{ minWidth: 'max(100%, 500px)', height: '100%' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                        <XAxis dataKey="mesAnoFormatado" stroke="var(--text-muted)" fontSize={12} tickLine={false} />
-                        <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `R$ ${val}`} />
-                        <Tooltip content={({ active, payload }: any) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            return (
-                              <div style={{
-                                backgroundColor: 'var(--bg-card)',
-                                border: '1px solid var(--border-color)',
-                                padding: '0.75rem',
-                                borderRadius: '8px',
-                                boxShadow: 'var(--shadow-lg)'
-                              }}>
-                                <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.25rem' }}>
-                                  {data.mesAnoFormatado}
-                                </p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                  <p style={{ margin: 0, color: 'var(--color-verde-entradas)', fontSize: '0.875rem' }}>
-                                    Receitas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.receitas)}</strong>
-                                  </p>
-                                  <p style={{ margin: 0, color: 'var(--color-vermelho-fixos)', fontSize: '0.875rem' }}>
-                                    Despesas: <strong style={{ color: 'var(--text-color)' }}>{formatBRL(data.despesas)}</strong>
-                                  </p>
-                                  <p style={{ margin: 0, color: data.receitas - data.despesas >= 0 ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)', fontSize: '0.875rem', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
-                                    Resultado: <span>{formatBRL(data.receitas - data.despesas)}</span>
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }} />
-                        <Bar name="Receitas" dataKey="receitas" fill="var(--color-verde-entradas)" radius={[4, 4, 0, 0]} maxBarSize={25} />
-                        <Bar name="Despesas" dataKey="despesas" fill="var(--color-vermelho-fixos)" radius={[4, 4, 0, 0]} maxBarSize={25} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            )}
           </Card>
 
           {/* ----------------- BOX "CONTA REAL VS PROJETADA" (BELOW CHART) ----------------- */}
