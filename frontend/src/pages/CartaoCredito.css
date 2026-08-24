@@ -71,6 +71,63 @@
   border: 1px solid rgba(113, 65, 139, 0.2);
 }
 
+.badge-recorrente {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.type-toggle-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  background-color: var(--bg-main);
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 1.25rem;
+}
+
+.type-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.type-toggle-btn.active {
+  background-color: var(--bg-card);
+  color: var(--text-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.recorrente-info-box {
+  background-color: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--text-color);
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin-top: 1rem;
+}
+
 .cc-col-parcela-atual {
   text-align: right;
   font-size: 0.9rem;
@@ -111,6 +168,24 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.cancelled-subs-section {
+  margin-top: 1.5rem;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 1rem;
+}
+
+.cancelled-sub-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  background-color: rgba(0, 0, 0, 0.04);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
 }
 
 /* Responsividade Mobile */

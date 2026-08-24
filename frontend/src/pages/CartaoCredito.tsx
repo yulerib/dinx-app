@@ -4,29 +4,18 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { ProgressBar } from '../components/ui/ProgressBar';
-import { Plus, Check, Loader2, Edit2, Trash2, Settings } from 'lucide-react';
+import { Plus, Check, Loader2, Edit2, Trash2, Settings, Repeat, Ban, RotateCcw, CreditCard } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
-import { parcelasService } from '../services/parcelas';
+import { parcelasService, getParcelaCartaoInfo, getMesAnoAnteriorHelper } from '../services/parcelas';
 import { chartsService } from '../services/charts';
 import type { ChartDataPoint } from '../services/charts';
 import type { CompraParcelada, PagamentoFatura, CategoriaCartao } from '../types/database.types';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import './CartaoCredito.css';
 
-// Função para calcular qual é a parcela do mês atual
-function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas: number): number | null {
-  const [startY, startM] = mesAnoInicio.split('-').map(Number);
-  const [currY, currM] = mesAnoAtual.split('-').map(Number);
-  const diff = (currY - startY) * 12 + (currM - startM);
-  
-  if (diff >= 0 && diff < numParcelas) {
-    return diff + 1;
-  }
-  return null; // Fora do intervalo (ainda não começou ou já terminou)
-}
-
 interface CompraAtiva extends CompraParcelada {
-  numero_parcela_atual: number;
+  numero_parcela_atual: number | null;
+  is_recorrente: boolean;
 }
 
 export function CartaoCredito() {
@@ -57,6 +46,7 @@ export function CartaoCredito() {
 
   // Form Compra
   const [compraToEdit, setCompraToEdit] = useState<CompraParcelada | null>(null);
+  const [isRecorrente, setIsRecorrente] = useState(false);
   const [nomeCompra, setNomeCompra] = useState('');
   const [descricao, setDescricao] = useState('');
   const [valorTotal, setValorTotal] = useState(0);
@@ -65,20 +55,13 @@ export function CartaoCredito() {
   const [mesAnoInicio, setMesAnoInicio] = useState(mesAno);
   const [dataCompra, setDataCompra] = useState('');
   const [idCategoria, setIdCategoria] = useState<string | null>(null);
+  const [mesAnoFim, setMesAnoFim] = useState<string | null>(null);
 
   // Form Categoria
   const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
-  const getMesAnoAnterior = (mesAnoStr: string): string => {
-    const [year, month] = mesAnoStr.split('-').map(Number);
-    const date = new Date(year, month - 2, 1);
-    const newY = date.getFullYear();
-    const newM = String(date.getMonth() + 1).padStart(2, '0');
-    return `${newY}-${newM}`;
-  };
-
-  const mesAnoAnterior = getMesAnoAnterior(mesAno);
+  const mesAnoAnterior = getMesAnoAnteriorHelper(mesAno);
 
   const fetchData = async () => {
     try {
@@ -130,8 +113,8 @@ export function CartaoCredito() {
   // Sempre que a lista global de parcelas mudar, recalcula as ativas
   useEffect(() => {
     const ativas = todasParcelas.map(compra => {
-      const p = getParcelaAtual(compra.mes_ano_inicio, mesAno, compra.num_parcelas);
-      return p ? { ...compra, numero_parcela_atual: p } : null;
+      const info = getParcelaCartaoInfo(compra, mesAno);
+      return info.ativa ? { ...compra, numero_parcela_atual: info.numeroParcelaAtual, is_recorrente: info.isRecorrente } : null;
     }).filter(c => c !== null) as CompraAtiva[];
     
     // Ordena as compras por ordem de dia do primeiro para o último
@@ -150,10 +133,15 @@ export function CartaoCredito() {
 
   // Fatura Mês Anterior
   const parcelasAnterior = todasParcelas.filter(compra => {
-    const p = getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas);
-    return p !== null;
+    return getParcelaCartaoInfo(compra, mesAnoAnterior).ativa;
   });
   const valorFaturaAnterior = parcelasAnterior.reduce((acc, p) => acc + p.valor_parcela, 0);
+
+  // Assinaturas Canceladas em/antes deste mês
+  const assinaturasCanceladas = todasParcelas.filter(compra => {
+    if (!compra.recorrente) return false;
+    return compra.mes_ano_inicio <= mesAno && compra.mes_ano_fim && compra.mes_ano_fim < mesAno;
+  });
 
   const isAtrasada = () => {
     if (pagamentoFaturaAnterior?.pago) return false;
@@ -205,6 +193,7 @@ export function CartaoCredito() {
   // Manipuladores de Compra
   const handleOpenNewCompra = () => {
     setCompraToEdit(null);
+    setIsRecorrente(false);
     setNomeCompra('');
     setDescricao('');
     setValorTotal(0);
@@ -212,7 +201,8 @@ export function CartaoCredito() {
     setValorParcela(0);
     setMesAnoInicio(mesAno);
     setIdCategoria(null);
-    // Initialize dateCompra to current date / mesAno-01
+    setMesAnoFim(null);
+
     const today = new Date();
     const todayMesAno = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     if (mesAno === todayMesAno) {
@@ -226,6 +216,7 @@ export function CartaoCredito() {
 
   const handleOpenEditCompra = (compra: CompraParcelada) => {
     setCompraToEdit(compra);
+    setIsRecorrente(!!compra.recorrente);
     setNomeCompra(compra.nome_compra);
     setDescricao(compra.descricao || '');
     setValorTotal(compra.valor_total);
@@ -234,40 +225,55 @@ export function CartaoCredito() {
     setMesAnoInicio(compra.mes_ano_inicio);
     setDataCompra(compra.data_compra);
     setIdCategoria(compra.id_categoria || null);
+    setMesAnoFim(compra.mes_ano_fim || null);
     setIsCompraModalOpen(true);
   };
 
   const handleSaveCompra = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nomeCompra || valorTotal <= 0 || numParcelas < 1 || valorParcela <= 0 || !mesAnoInicio || !dataCompra) return;
+    if (!nomeCompra || !mesAnoInicio || !dataCompra) return;
+
+    if (isRecorrente) {
+      if (valorParcela <= 0) return;
+    } else {
+      if (valorTotal <= 0 || numParcelas < 1 || valorParcela <= 0) return;
+    }
     
     try {
       setIsSubmitting(true);
       const descVal = descricao.trim() ? descricao.trim() : null;
       const catVal = idCategoria || null;
+      const finalValorTotal = isRecorrente ? valorParcela : valorTotal;
+      const finalNumParcelas = isRecorrente ? 1 : numParcelas;
+      const finalValorParcela = valorParcela;
+      const finalMesAnoFim = isRecorrente ? mesAnoFim : null;
 
       if (compraToEdit) {
         await parcelasService.updateParcela(
           compraToEdit.id, 
           nomeCompra, 
-          valorTotal, 
-          numParcelas, 
-          valorParcela, 
+          finalValorTotal, 
+          finalNumParcelas, 
+          finalValorParcela, 
           mesAnoInicio,
           descVal,
           dataCompra,
-          catVal
+          catVal,
+          isRecorrente,
+          finalMesAnoFim
         );
       } else {
         await parcelasService.addParcela(
           nomeCompra, 
-          valorTotal, 
-          numParcelas, 
-          valorParcela, 
+          finalValorTotal, 
+          finalNumParcelas, 
+          finalValorParcela, 
           mesAnoInicio,
           descVal,
           dataCompra,
-          catVal
+          catVal,
+          isRecorrente,
+          finalMesAnoFim
         );
       }
       await fetchData();
@@ -279,8 +285,31 @@ export function CartaoCredito() {
     }
   };
 
+  const handleCancelarAssinatura = async (compra: CompraParcelada) => {
+    const confirmMsg = `Deseja cancelar a assinatura "${compra.nome_compra}" a partir de ${formatMesAnoAbreviado(mesAno)}?\n\nEla deixará de ser cobrada na fatura deste mês em diante. Nos meses anteriores ela permanecerá intacta no histórico.`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      await parcelasService.cancelarAssinatura(compra.id, mesAno);
+      await fetchData();
+    } catch (error: any) {
+      alert('Erro ao cancelar assinatura: ' + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  const handleReativarAssinatura = async (compra: CompraParcelada) => {
+    if (!confirm(`Deseja reativar a assinatura "${compra.nome_compra}"? Ela voltará a ser cobrada mensalmente nas faturas.`)) return;
+
+    try {
+      await parcelasService.reativarAssinatura(compra.id);
+      await fetchData();
+    } catch (error: any) {
+      alert('Erro ao reativar assinatura: ' + (error.message || JSON.stringify(error)));
+    }
+  };
+
   const handleDeleteCompra = async (id: string) => {
-    if (!confirm('Excluir esta compra? Todo o histórico dela desaparecerá de todos os meses.')) return;
+    if (!confirm('Excluir este item? Todo o histórico dele desaparecerá de todos os meses.')) return;
     try {
       await parcelasService.deleteParcela(id);
       await fetchData();
@@ -563,14 +592,14 @@ export function CartaoCredito() {
             <span style={{ marginLeft: '0.5rem' }}>Carregando...</span>
           </div>
         ) : parcelasAtivas.length === 0 ? (
-          <p className="text-muted" style={{ margin: 0, padding: '1rem' }}>Nenhuma compra parcelada ativa para este mês.</p>
+          <p className="text-muted" style={{ margin: 0, padding: '1rem' }}>Nenhuma compra ou assinatura ativa para este mês.</p>
         ) : (
           <div className="cc-table">
             <div className="cc-row-header">
               <div>Dia</div>
               <div>Descrição da Compra</div>
               <div>Categoria</div>
-              <div style={{ textAlign: 'right' }}>Parcela</div>
+              <div style={{ textAlign: 'right' }}>Parcela / Tipo</div>
               <div style={{ textAlign: 'right' }}>Valor</div>
               <div style={{ textAlign: 'center' }}></div>
             </div>
@@ -586,7 +615,14 @@ export function CartaoCredito() {
                   
                   {/* Descrição da Compra (Nome e descrição) */}
                   <div className="cc-col-info">
-                    <span className="cc-compra-nome">{compra.nome_compra}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span className="cc-compra-nome">{compra.nome_compra}</span>
+                      {compra.is_recorrente && (
+                        <span className="badge-recorrente" title="Assinatura recorrente mensal">
+                          <Repeat size={10} /> Recorrente
+                        </span>
+                      )}
+                    </div>
                     <span className="cc-compra-desc">{compra.descricao || <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Sem descrição</span>}</span>
                   </div>
 
@@ -603,15 +639,21 @@ export function CartaoCredito() {
                     )}
                   </div>
 
-                  {/* Parcela Atual */}
+                  {/* Parcela Atual ou Indicador de Assinatura */}
                   <div className="cc-col-parcela-atual">
-                    {compra.numero_parcela_atual} / {compra.num_parcelas}
+                    {compra.is_recorrente ? (
+                      <span className="badge-recorrente" style={{ marginLeft: 'auto' }}>
+                        <Repeat size={11} /> Mensal
+                      </span>
+                    ) : (
+                      <span>{compra.numero_parcela_atual} / {compra.num_parcelas}</span>
+                    )}
                   </div>
 
                   {/* Valor da Parcela / Total */}
                   <div className="cc-col-valor">
                     <div className="cc-col-valor-row">
-                      <span className="cc-label-mobile">Valor da Parcela</span>
+                      <span className="cc-label-mobile">{compra.is_recorrente ? 'Mensalidade' : 'Valor da Parcela'}</span>
                       <span className="cc-valor-parcela">
                         {formatBRL(compra.num_parcelas === 1 ? compra.valor_total : compra.valor_parcela)}
                       </span>
@@ -619,20 +661,37 @@ export function CartaoCredito() {
                     <div className="cc-col-valor-row total-row">
                       <span className="cc-label-mobile">Total</span>
                       <span className="cc-valor-total">
-                        <span className="cc-total-desktop-prefix">Total: </span>
-                        {formatBRL(compra.valor_total)}
+                        {compra.is_recorrente ? (
+                          <span style={{ color: '#6366f1', fontWeight: 600 }}>Assinatura</span>
+                        ) : (
+                          <>
+                            <span className="cc-total-desktop-prefix">Total: </span>
+                            {formatBRL(compra.valor_total)}
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
 
                   {/* Ações */}
                   <div className="cc-col-actions">
+                    {compra.is_recorrente && (
+                      <button 
+                        onClick={() => handleCancelarAssinatura(compra)} 
+                        style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#ef4444'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                        title={`Cancelar assinatura a partir de ${formatMesAnoAbreviado(mesAno)}`}
+                      >
+                        <Ban size={16} />
+                      </button>
+                    )}
                     <button 
                       onClick={() => handleOpenEditCompra(compra)} 
                       style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
                       onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'}
                       onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                      title="Editar Compra"
+                      title="Editar"
                     >
                       <Edit2 size={16} />
                     </button>
@@ -641,7 +700,7 @@ export function CartaoCredito() {
                       style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
                       onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
                       onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                      title="Excluir Compra"
+                      title="Excluir Definitivamente"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -649,6 +708,51 @@ export function CartaoCredito() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Seção de Assinaturas Canceladas / Inativas para o mês selecionado */}
+        {assinaturasCanceladas.length > 0 && (
+          <div className="cancelled-subs-section">
+            <h4 style={{ fontSize: '0.825rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.05em', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Ban size={14} style={{ color: 'var(--text-muted)' }} /> Assinaturas Canceladas ({assinaturasCanceladas.length})
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {assinaturasCanceladas.map(sub => {
+                const mesCancelamento = (() => {
+                  const [y, m] = (sub.mes_ano_fim || '').split('-').map(Number);
+                  const d = new Date(y, m, 1);
+                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                })();
+
+                return (
+                  <div key={sub.id} className="cancelled-sub-item">
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                        {sub.nome_compra}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {formatBRL(sub.valor_parcela)}/mês • Cancelada a partir de {formatMesAnoAbreviado(mesCancelamento)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <Button variant="outline" onClick={() => handleReativarAssinatura(sub)} icon={<RotateCcw size={14} />}>
+                        Reativar
+                      </Button>
+                      <button 
+                        onClick={() => handleDeleteCompra(sub.id)} 
+                        style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                        title="Excluir Definitivamente"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </Card>
@@ -676,14 +780,47 @@ export function CartaoCredito() {
       </Modal>
 
       {/* Modal: Nova/Editar Compra */}
-      <Modal isOpen={isCompraModalOpen} onClose={() => setIsCompraModalOpen(false)} title={compraToEdit ? "Editar Compra" : "Nova Compra"}>
+      <Modal isOpen={isCompraModalOpen} onClose={() => setIsCompraModalOpen(false)} title={compraToEdit ? (isRecorrente ? "Editar Assinatura" : "Editar Compra") : (isRecorrente ? "Nova Assinatura Recorrente" : "Nova Compra no Cartão")}>
         <form onSubmit={handleSaveCompra}>
+          {/* Seletor de Tipo */}
+          <div className="type-toggle-group">
+            <button 
+              type="button" 
+              className={`type-toggle-btn ${!isRecorrente ? 'active' : ''}`}
+              onClick={() => {
+                setIsRecorrente(false);
+                if (valorParcela > 0 && valorTotal === 0) {
+                  setValorTotal(valorParcela * numParcelas);
+                }
+              }}
+            >
+              <CreditCard size={16} />
+              Parcelada / À Vista
+            </button>
+            <button 
+              type="button" 
+              className={`type-toggle-btn ${isRecorrente ? 'active' : ''}`}
+              onClick={() => {
+                setIsRecorrente(true);
+                if (valorTotal > 0 && valorParcela === 0) {
+                  setValorParcela(valorTotal);
+                } else if (valorParcela > 0) {
+                  setValorTotal(valorParcela);
+                }
+                setNumParcelas(1);
+              }}
+            >
+              <Repeat size={16} />
+              Assinatura Recorrente
+            </button>
+          </div>
+
           <div className="input-group">
-            <label>Nome da Compra</label>
+            <label>{isRecorrente ? 'Nome da Assinatura' : 'Nome da Compra'}</label>
             <input 
               type="text" 
               className="input" 
-              placeholder="Ex: Celular Novo" 
+              placeholder={isRecorrente ? "Ex: Netflix, Spotify, Academia, ChatGPT" : "Ex: Celular Novo"} 
               value={nomeCompra}
               onChange={e => setNomeCompra(e.target.value)}
               required
@@ -695,57 +832,105 @@ export function CartaoCredito() {
             <input 
               type="text" 
               className="input" 
-              placeholder="Ex: Loja Física, Presente, etc." 
+              placeholder="Ex: Plano Familiar, Assinatura Anual dividida, etc." 
               value={descricao}
               onChange={e => setDescricao(e.target.value)}
             />
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <CurrencyInput 
-              label="Valor Total da Compra"
-              value={valorTotal}
-              onChange={onChangeValorTotal}
-              required
-            />
-            
-            <div className="input-group">
-              <label>Número de Parcelas</label>
-              <input 
-                type="number" 
-                className="input" 
-                min="1"
-                step="1"
-                value={numParcelas}
-                onChange={e => onChangeNumParcelas(parseInt(e.target.value) || 0)}
-                required
-              />
-            </div>
-          </div>
+          {isRecorrente ? (
+            /* Campos específicos para Assinatura Recorrente */
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                <CurrencyInput 
+                  label="Valor Mensal da Assinatura"
+                  value={valorParcela}
+                  onChange={(val) => {
+                    setValorParcela(val);
+                    setValorTotal(val);
+                  }}
+                  required
+                />
+
+                <div className="input-group">
+                  <label>Mês de Início</label>
+                  <input 
+                    type="month" 
+                    className="input" 
+                    value={mesAnoInicio}
+                    onChange={e => setMesAnoInicio(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="recorrente-info-box">
+                🔄 <strong>Débito Recorrente Contínuo:</strong> Esta assinatura será incluída mensalmente em todas as faturas a partir do mês de início com prazo indeterminado, até que você cancele.
+              </div>
+
+              {mesAnoFim && (
+                <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.85rem', backgroundColor: '#fef3c7', color: '#92400e', borderRadius: '6px', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>⚠️ Cancelada a partir do mês seguinte a <strong>{formatMesAnoAbreviado(mesAnoFim)}</strong></span>
+                  <button 
+                    type="button" 
+                    onClick={() => setMesAnoFim(null)} 
+                    style={{ background: 'none', border: 'none', color: '#b45309', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}
+                  >
+                    Reativar Agora
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Campos específicos para Compra Parcelada / À Vista */
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                <CurrencyInput 
+                  label="Valor Total da Compra"
+                  value={valorTotal}
+                  onChange={onChangeValorTotal}
+                  required
+                />
+                
+                <div className="input-group">
+                  <label>Número de Parcelas</label>
+                  <input 
+                    type="number" 
+                    className="input" 
+                    min="1"
+                    step="1"
+                    value={numParcelas}
+                    onChange={e => onChangeNumParcelas(parseInt(e.target.value) || 0)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                <CurrencyInput 
+                  label="Valor de cada Parcela"
+                  value={valorParcela}
+                  onChange={onChangeValorParcela}
+                  required
+                />
+
+                <div className="input-group">
+                  <label>Mês de Início</label>
+                  <input 
+                    type="month" 
+                    className="input" 
+                    value={mesAnoInicio}
+                    onChange={e => setMesAnoInicio(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <CurrencyInput 
-              label="Valor de cada Parcela"
-              value={valorParcela}
-              onChange={onChangeValorParcela}
-              required
-            />
-
             <div className="input-group">
-              <label>Mês de Início</label>
-              <input 
-                type="month" 
-                className="input" 
-                value={mesAnoInicio}
-                onChange={e => setMesAnoInicio(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <div className="input-group">
-              <label>Data da Compra</label>
+              <label>{isRecorrente ? 'Data / Dia da Cobrança' : 'Data da Compra'}</label>
               <input 
                 type="date" 
                 className="input" 
@@ -780,15 +965,17 @@ export function CartaoCredito() {
             </div>
           </div>
 
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-            Dica: Altere qualquer um dos valores (Total, Qtd Parcelas ou Valor Parcela) e os outros se ajustarão automaticamente.
-          </div>
+          {!isRecorrente && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+              Dica: Altere qualquer um dos valores (Total, Qtd Parcelas ou Valor Parcela) e os outros se ajustarão automaticamente.
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
             <Button type="button" variant="outline" onClick={() => setIsCompraModalOpen(false)}>Cancelar</Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
-              Salvar Compra
+              {compraToEdit ? 'Salvar Alterações' : (isRecorrente ? 'Cadastrar Assinatura' : 'Salvar Compra')}
             </Button>
           </div>
         </form>

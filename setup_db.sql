@@ -48,6 +48,11 @@ CREATE TABLE public.compras_parceladas (
     num_parcelas INTEGER NOT NULL,
     valor_parcela NUMERIC NOT NULL,
     mes_ano_inicio TEXT NOT NULL, -- Ex: '2026-05'
+    descricao TEXT,
+    data_compra DATE NOT NULL DEFAULT CURRENT_DATE,
+    id_categoria UUID REFERENCES public.categorias_cartao(id) ON DELETE SET NULL,
+    recorrente BOOLEAN NOT NULL DEFAULT FALSE,
+    mes_ano_fim TEXT, -- Ex: '2026-10' (se cancelada)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

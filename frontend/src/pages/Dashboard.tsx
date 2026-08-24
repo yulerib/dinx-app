@@ -10,7 +10,7 @@ import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown,
 import { useMonth } from '../contexts/MonthContext';
 import { gastosFixosService } from '../services/gastosFixos';
 import { gastosDiariosService } from '../services/gastosDiarios';
-import { parcelasService } from '../services/parcelas';
+import { parcelasService, getParcelaCartaoInfo } from '../services/parcelas';
 import { entradasService } from '../services/entradas';
 import { chartsService } from '../services/charts';
 import type { MonthlyPerformancePoint } from '../services/charts';
@@ -181,21 +181,13 @@ export function Dashboard() {
       ]);
       setParcelasPrevisto(config?.limite_mensal_parcelas || 0);
 
-      const getParcelaAtual = (mesAnoInicio: string, mesAnoAtual: string, numParcelas: number) => {
-        const [startY, startM] = mesAnoInicio.split('-').map(Number);
-        const [currY, currM] = mesAnoAtual.split('-').map(Number);
-        const diff = (currY - startY) * 12 + (currM - startM);
-        if (diff >= 0 && diff < numParcelas) return diff + 1;
-        return null;
-      };
-
       // Fatura do Mês Atual
-      const ativas = parcelas.filter(c => getParcelaAtual(c.mes_ano_inicio, mesAno, c.num_parcelas) !== null);
+      const ativas = parcelas.filter(c => getParcelaCartaoInfo(c, mesAno).ativa);
       const pReal = ativas.reduce((acc, p) => acc + p.valor_parcela, 0);
       setParcelasRealizado(pReal);
 
       // Fatura do Mês Anterior
-      const prevAtivas = parcelas.filter(c => getParcelaAtual(c.mes_ano_inicio, pMesAno, c.num_parcelas) !== null);
+      const prevAtivas = parcelas.filter(c => getParcelaCartaoInfo(c, pMesAno).ativa);
       const ccPrevValue = prevAtivas.reduce((acc, p) => acc + p.valor_parcela, 0);
       setCcBillPreviousMonth(ccPrevValue);
 

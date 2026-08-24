@@ -75,18 +75,21 @@ const addMonths = (mesAno: string, count: number): string => {
   return `${newY}-${newM}`;
 };
 
-const diffMonths = (start: string, end: string): number => {
-  const s = parseMesAno(start);
-  const e = parseMesAno(end);
-  return (e.year - s.year) * 12 + (e.month - s.month);
-};
-
-function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas: number): number | null {
+function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas: number, recorrente?: boolean, mesAnoFim?: string | null): number | null {
   const [startY, startM] = mesAnoInicio.split('-').map(Number);
   const [currY, currM] = mesAnoAtual.split('-').map(Number);
   const diff = (currY - startY) * 12 + (currM - startM);
   
-  if (diff >= 0 && diff < numParcelas) {
+  if (diff < 0) return null;
+
+  if (recorrente) {
+    if (!mesAnoFim || mesAnoAtual <= mesAnoFim) {
+      return 1;
+    }
+    return null;
+  }
+
+  if (diff < numParcelas) {
     return diff + 1;
   }
   return null;
@@ -150,12 +153,16 @@ export const chartsService = {
     const allParcelas = (parcelas || []) as CompraParcelada[];
     const limiteParcelas = (configs?.[0] as Configuracao)?.limite_mensal_parcelas || 0;
 
-    let maxMesAno = addMonths(currentMesAno, 1);
+    let maxMesAno = addMonths(currentMesAno, 6);
 
     allParcelas.forEach(p => {
-      const pEndMonth = addMonths(p.mes_ano_inicio, p.num_parcelas - 1);
-      if (pEndMonth > maxMesAno) {
-        maxMesAno = pEndMonth;
+      if (!p.recorrente) {
+        const pEndMonth = addMonths(p.mes_ano_inicio, p.num_parcelas - 1);
+        if (pEndMonth > maxMesAno) {
+          maxMesAno = pEndMonth;
+        }
+      } else if (p.mes_ano_fim && p.mes_ano_fim > maxMesAno) {
+        maxMesAno = p.mes_ano_fim;
       }
     });
 
@@ -207,8 +214,7 @@ export const chartsService = {
 
       const parcelasProj = limiteParcelas;
       const ativas = allParcelas.filter(p => {
-        const diff = diffMonths(p.mes_ano_inicio, month);
-        return diff >= 0 && diff < p.num_parcelas;
+        return getParcelaAtual(p.mes_ano_inicio, month, p.num_parcelas, p.recorrente, p.mes_ano_fim) !== null;
       });
       const parcelasExec = ativas.reduce((sum, p) => sum + p.valor_parcela, 0);
 
@@ -393,7 +399,7 @@ export const chartsService = {
       // Fatura Cartão M-1 paga em M
       const m1 = getMesAnoAnterior(m);
       const faturaM1 = (dbComprasParceladas || []).filter(compra => {
-        const p = getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas);
+        const p = getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim);
         return p !== null;
       }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
@@ -443,7 +449,7 @@ export const chartsService = {
     // Fatura anterior (M-1)
     const mesAnoAnterior = getMesAnoAnterior(currentMonthIso);
     const faturaAnterior = (dbComprasParceladas || []).filter(compra => {
-      const p = getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas);
+      const p = getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim);
       return p !== null;
     }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
@@ -731,7 +737,7 @@ export const chartsService = {
 
       // Fatura Cartão de Crédito
       const ccM = (dbComprasParceladas || []).filter(compra => {
-        const p = getParcelaAtual(compra.mes_ano_inicio, m, compra.num_parcelas);
+        const p = getParcelaAtual(compra.mes_ano_inicio, m, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim);
         return p !== null;
       }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
@@ -892,7 +898,7 @@ export const chartsService = {
       const dailyM = (dbRegistrosDiarios || []).filter(r => r.data.substring(0, 7) === m).reduce((sum, r) => sum + Number(r.valor_gasto), 0);
 
       const m1 = getMesAnoAnterior(m);
-      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
       const pagoFaturaM1 = (dbPagamentosFaturas || []).find(f => f.mes_ano === m1 && f.pago === true);
       const ccM = pagoFaturaM1 ? faturaM1 : 0;
 
@@ -948,7 +954,7 @@ export const chartsService = {
     const mesesAbrev = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const [prevY, prevMo] = mesAnoAnterior.split('-').map(Number);
     const prevMonthLabel = `${mesesAbrev[prevMo - 1]}/${String(prevY).slice(-2)}`;
-    const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+    const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
     const pagoFaturaAnterior = (dbPagamentosFaturas || []).find(f => f.mes_ano === mesAnoAnterior);
     const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
     const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;

@@ -63,6 +63,8 @@ export interface CompraParcelada {
   descricao?: string | null;
   data_compra: string; // YYYY-MM-DD
   id_categoria?: string | null;
+  recorrente?: boolean;
+  mes_ano_fim?: string | null; // YYYY-MM
   created_at: string;
 }
 

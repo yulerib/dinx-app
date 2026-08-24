@@ -193,33 +193,47 @@ export const aiTools: FunctionDeclaration[] = [
   // Parcelas e Configuração Global
   {
     name: "adicionarParcela",
-    description: "Cadastra uma nova compra parcelada (cartão de crédito, carnê, etc.).",
+    description: "Cadastra uma nova compra parcelada ou assinatura recorrente no cartão de crédito.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
-        nome_compra: { type: SchemaType.STRING, description: "Nome do que foi comprado" },
-        valor_total: { type: SchemaType.NUMBER, description: "Valor total da compra" },
-        num_parcelas: { type: SchemaType.NUMBER, description: "Número de parcelas" },
-        valor_parcela: { type: SchemaType.NUMBER, description: "Valor de cada parcela" },
-        mes_ano_inicio: { type: SchemaType.STRING, description: "Mês da primeira parcela (YYYY-MM)" }
+        nome_compra: { type: SchemaType.STRING, description: "Nome do que foi comprado ou da assinatura (ex: Netflix, iPhone)" },
+        valor_total: { type: SchemaType.NUMBER, description: "Valor total da compra (ou valor mensal se for assinatura)" },
+        num_parcelas: { type: SchemaType.NUMBER, description: "Número de parcelas (use 1 se for assinatura recorrente)" },
+        valor_parcela: { type: SchemaType.NUMBER, description: "Valor de cada parcela / mensalidade" },
+        mes_ano_inicio: { type: SchemaType.STRING, description: "Mês da primeira parcela ou início da assinatura (YYYY-MM)" },
+        recorrente: { type: SchemaType.BOOLEAN, description: "Defina como true se for uma assinatura recorrente cobrada mensalmente sem prazo determinado" }
       },
       required: ["nome_compra", "valor_total", "num_parcelas", "valor_parcela", "mes_ano_inicio"]
     }
   },
   {
     name: "editarParcela",
-    description: "Edita os dados de uma compra parcelada existente.",
+    description: "Edita os dados de uma compra parcelada ou assinatura existente.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
         id: { type: SchemaType.STRING, description: "ID da parcela" },
-        nome_compra: { type: SchemaType.STRING, description: "Nome do produto" },
+        nome_compra: { type: SchemaType.STRING, description: "Nome do produto/assinatura" },
         valor_total: { type: SchemaType.NUMBER, description: "Valor total" },
         num_parcelas: { type: SchemaType.NUMBER, description: "Total de parcelas" },
         valor_parcela: { type: SchemaType.NUMBER, description: "Valor mensal" },
-        mes_ano_inicio: { type: SchemaType.STRING, description: "Início das parcelas YYYY-MM" }
+        mes_ano_inicio: { type: SchemaType.STRING, description: "Início das parcelas YYYY-MM" },
+        recorrente: { type: SchemaType.BOOLEAN, description: "Se é assinatura recorrente" }
       },
       required: ["id", "nome_compra", "valor_total", "num_parcelas", "valor_parcela", "mes_ano_inicio"]
+    }
+  },
+  {
+    name: "cancelarAssinaturaCartao",
+    description: "Cancela uma assinatura recorrente do cartão de crédito a partir de determinado mês.",
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        id: { type: SchemaType.STRING, description: "ID da assinatura/compra recorrente" },
+        a_partir_de_mes_ano: { type: SchemaType.STRING, description: "Mês a partir do qual a assinatura deixa de ser cobrada (YYYY-MM)" }
+      },
+      required: ["id", "a_partir_de_mes_ano"]
     }
   },
   {
@@ -348,8 +362,30 @@ export async function executeAiTool(name: string, args: any) {
       case "apagarCategoriaDiaria": await gastosDiariosService.deleteCategoria(args.id); return { success: true };
       case "lancarGastoDiario": return await gastosDiariosService.addRegistroDiario(args.id_categoria, args.data, args.valor, args.descricao);
       case "zerarCategoriaDiaria": return await gastosDiariosService.addRegistroDiario(args.id_categoria, args.data, 0, "Zerado");
-      case "adicionarParcela": return await parcelasService.addParcela(args.nome_compra, args.valor_total, args.num_parcelas, args.valor_parcela, args.mes_ano_inicio);
-      case "editarParcela": await parcelasService.updateParcela(args.id, args.nome_compra, args.valor_total, args.num_parcelas, args.valor_parcela, args.mes_ano_inicio); return { success: true };
+      case "adicionarParcela": return await parcelasService.addParcela(
+        args.nome_compra, 
+        args.valor_total, 
+        args.num_parcelas, 
+        args.valor_parcela, 
+        args.mes_ano_inicio,
+        args.descricao || null,
+        args.data_compra || `${args.mes_ano_inicio}-01`,
+        args.id_categoria || null,
+        args.recorrente ?? false
+      );
+      case "editarParcela": await parcelasService.updateParcela(
+        args.id, 
+        args.nome_compra, 
+        args.valor_total, 
+        args.num_parcelas, 
+        args.valor_parcela, 
+        args.mes_ano_inicio,
+        args.descricao || null,
+        args.data_compra || `${args.mes_ano_inicio}-01`,
+        args.id_categoria || null,
+        args.recorrente ?? false
+      ); return { success: true };
+      case "cancelarAssinaturaCartao": await parcelasService.cancelarAssinatura(args.id, args.a_partir_de_mes_ano); return { success: true };
       case "apagarParcela": await parcelasService.deleteParcela(args.id); return { success: true };
       case "atualizarLimiteParcelas": await parcelasService.updateLimiteParcelas(args.novo_limite); return { success: true };
       case "consultarHistoricoDiario": {

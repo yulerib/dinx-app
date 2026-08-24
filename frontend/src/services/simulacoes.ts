@@ -84,10 +84,20 @@ const getMesAnoAnterior = (mesAno: string): string => {
   return `${newY}-${newM}`;
 };
 
-function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas: number): number | null {
+function getParcelaAtual(mesAnoInicio: string, mesAnoAtual: string, numParcelas: number, recorrente?: boolean, mesAnoFim?: string | null): number | null {
   const [startY, startM] = mesAnoInicio.split('-').map(Number);
   const [currY, currM] = mesAnoAtual.split('-').map(Number);
   const diff = (currY - startY) * 12 + (currM - startM);
+  
+  if (diff < 0) return null;
+
+  if (recorrente) {
+    if (!mesAnoFim || mesAnoAtual <= mesAnoFim) {
+      return 1;
+    }
+    return null;
+  }
+
   if (diff >= 0 && diff < numParcelas) {
     return diff + 1;
   }
@@ -240,7 +250,7 @@ export const simulacoesService = {
         .reduce((sum, r) => sum + Number(r.valor_gasto), 0);
 
       const m1 = getMesAnoAnterior(m);
-      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
       const pagoFaturaM1 = (dbPagamentosFaturas || []).find(f => f.mes_ano === m1 && f.pago === true);
       const ccM = pagoFaturaM1 ? faturaM1 : 0;
 
@@ -405,7 +415,7 @@ export const simulacoesService = {
     const mesAnoAnterior = getMesAnoAnterior(currentMonthIso);
     const [prevY, prevMo] = mesAnoAnterior.split('-').map(Number);
     const prevMonthLabel = `${mesesAbrev[prevMo - 1]}/${String(prevY).slice(-2)}`;
-    const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+    const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
     const pagoFaturaAnterior = (dbPagamentosFaturas || []).find(f => f.mes_ano === mesAnoAnterior);
     const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
     const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;

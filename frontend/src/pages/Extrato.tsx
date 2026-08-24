@@ -3,6 +3,7 @@ import { Card } from '../components/ui/Card';
 import { Loader2, ArrowUpRight, Wallet, CreditCard, Calendar, PiggyBank, TrendingUp } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { supabase } from '../lib/supabase';
+import { getParcelaCartaoInfo } from '../services/parcelas';
 
 
 interface Movimento {
@@ -38,13 +39,6 @@ export function Extrato() {
     return `${newY}-${newM}`;
   };
 
-  const getParcelaAtual = (mesAnoInicio: string, mesAnoAtual: string, numParcelas: number): number | null => {
-    const [startY, startM] = mesAnoInicio.split('-').map(Number);
-    const [currY, currM] = mesAnoAtual.split('-').map(Number);
-    const diff = (currY - startY) * 12 + (currM - startM);
-    if (diff >= 0 && diff < numParcelas) return diff + 1;
-    return null;
-  };
 
   const addMonths = (mesAno: string, count: number): string => {
     const [y, m] = mesAno.split('-').map(Number);
@@ -237,8 +231,7 @@ export function Extrato() {
         // Fatura Cartão M-1 paga em M
         const m1 = getMesAnoAnterior(m);
         const faturaM1 = comprasParceladas.filter(compra => {
-          const p = getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas);
-          return p !== null;
+          return getParcelaCartaoInfo(compra, m1).ativa;
         }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
         const pagoFaturaM1 = pagamentosFaturas.find(f => f.mes_ano === m1 && f.pago === true);
@@ -394,8 +387,7 @@ export function Extrato() {
       // D. Fatura Cartão de Crédito
       const mesAnoAnterior = getMesAnoAnterior(mesAno);
       const faturaAnterior = comprasParceladas.filter(compra => {
-        const p = getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas);
-        return p !== null;
+        return getParcelaCartaoInfo(compra, mesAnoAnterior).ativa;
       }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
       const pagoFaturaAnterior = pagamentosFaturas.find(f => f.mes_ano === mesAnoAnterior);
