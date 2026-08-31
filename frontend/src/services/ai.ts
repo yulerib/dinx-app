@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import type { FunctionDeclaration } from "@google/generative-ai";
-import { gastosFixosService } from "./gastosFixos";
+import { gastosFixosService, isGastoFixoPago } from "./gastosFixos";
 import { gastosDiariosService } from "./gastosDiarios";
 import { parcelasService } from "./parcelas";
 import { entradasService } from "./entradas";
@@ -528,8 +528,8 @@ export async function getCurrentContextSnapshot(mesAno: string, dataIso: string)
       id: f.id,
       nome: f.nome,
       valor_previsto: f.valor_previsto_base,
-      ja_pago_neste_mes: !!f.registro_mes,
-      valor_pago: f.registro_mes?.valor_real || 0
+      ja_pago_neste_mes: isGastoFixoPago(f.registro_atual),
+      valor_pago: isGastoFixoPago(f.registro_atual) ? (f.registro_atual?.valor_real ?? 0) : 0
     })),
     configuracao_global: config,
     compras_parceladas: parcelas,

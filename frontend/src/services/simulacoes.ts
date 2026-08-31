@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { getLocalYearMonth } from './gastosFixos';
+import { getLocalYearMonth, isGastoFixoPago } from './gastosFixos';
 
 export type SimulationCategory = 'entrada' | 'fixo' | 'diario' | 'cartao';
 
@@ -241,8 +241,9 @@ export const simulacoesService = {
       });
       fixosVigentes.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
-        if (reg) fixedM += Number(reg.valor_real);
-        else if (f.ativo) fixedM += Number(f.valor_previsto_base);
+        const isPaid = isGastoFixoPago(reg);
+        if (isPaid) fixedM += Number(reg!.valor_real ?? 0);
+        else if (f.ativo) fixedM += (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
       });
 
       const dailyM = (dbRegistrosDiarios || [])
@@ -387,11 +388,11 @@ export const simulacoesService = {
 
     activeFixos.forEach(f => {
       const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso);
-      const hasReal = reg && reg.valor_real !== null && reg.valor_real !== undefined && Number(reg.valor_real) > 0;
-      const valor = hasReal
-        ? Number(reg!.valor_real)
+      const isPaid = isGastoFixoPago(reg);
+      const valor = isPaid
+        ? Number(reg!.valor_real ?? 0)
         : (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
-      const dia = (hasReal && reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0)
+      const dia = (isPaid && reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0)
         ? reg!.dia_pagamento_real
         : (f.dia_pagamento_previsto || 10);
 
@@ -404,10 +405,10 @@ export const simulacoesService = {
         valorSimulado: valor,
         diaPrevistoOriginal: dia,
         diaSimulado: dia,
-        isOficialEfetuado: !!hasReal,
+        isOficialEfetuado: isPaid,
         isCustom: false,
         ativo: f.ativo ?? true,
-        detalhes: hasReal ? 'Gasto fixo pago' : 'Gasto fixo previsto'
+        detalhes: isPaid ? (valor === 0 ? 'Gasto fixo zerado' : 'Gasto fixo pago') : 'Gasto fixo previsto'
       });
     });
 

@@ -116,7 +116,13 @@ async function executeTool(name: string, args: any) {
         return data;
       }
       case "pagarGastoFixo": {
-        const { data } = await supabase.from('registros_gastos_fixos').upsert({ id_gasto_fixo: args.id, mes_ano: mesAno, valor_real: args.valor_real }, { onConflict: 'id_gasto_fixo,mes_ano' }).select().single();
+        const { data } = await supabase.from('registros_gastos_fixos').upsert({ 
+          id_gasto_fixo: args.id, 
+          mes_ano: mesAno, 
+          valor_real: args.valor_real,
+          dia_pagamento_real: today.getDate(),
+          data_pagamento_real: dataIso
+        }, { onConflict: 'id_gasto_fixo,mes_ano' }).select().single();
         return data;
       }
       case "adicionarCategoriaDiaria": {

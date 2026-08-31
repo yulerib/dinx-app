@@ -20,6 +20,15 @@ export function getLocalYearMonth(dateStr: string | null | undefined): string {
   }
 }
 
+export function isGastoFixoPago(registro: RegistroGastoFixo | null | undefined): boolean {
+  if (!registro) return false;
+  return (
+    registro.data_pagamento_real !== null ||
+    registro.dia_pagamento_real !== null ||
+    (registro.valor_real !== null && Number(registro.valor_real) > 0)
+  );
+}
+
 export const gastosFixosService = {
   // Busca todas as despesas ativas e seus registros para o mês atual
   async fetchGastosMensais(mesAno: string): Promise<GastoFixoMensal[]> {
@@ -82,7 +91,7 @@ export const gastosFixosService = {
   async upsertRegistro(
     id_gasto_fixo: string, 
     mes_ano: string, 
-    valor_real: number, 
+    valor_real: number | null, 
     valor_previsto_ajustado?: number | null,
     dia_pagamento_real?: number | null,
     data_pagamento_real?: string | null
@@ -135,6 +144,31 @@ export const gastosFixosService = {
         
       if (error) throw error;
       return data;
+    }
+  },
+
+  // Remove o pagamento do gasto fixo no mês
+  async clearPagamento(id_gasto_fixo: string, mes_ano: string, valor_previsto_ajustado?: number | null): Promise<void> {
+    if (valor_previsto_ajustado !== undefined && valor_previsto_ajustado !== null) {
+      // Mantém a previsão ajustada, mas limpa os dados de pagamento
+      const { error } = await supabase
+        .from('registros_gastos_fixos')
+        .update({
+          valor_real: null,
+          dia_pagamento_real: null,
+          data_pagamento_real: null
+        })
+        .eq('id_gasto_fixo', id_gasto_fixo)
+        .eq('mes_ano', mes_ano);
+      if (error) throw error;
+    } else {
+      // Se não havia previsão ajustada, pode deletar o registro mensal
+      const { error } = await supabase
+        .from('registros_gastos_fixos')
+        .delete()
+        .eq('id_gasto_fixo', id_gasto_fixo)
+        .eq('mes_ano', mes_ano);
+      if (error) throw error;
     }
   },
 

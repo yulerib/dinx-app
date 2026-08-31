@@ -7,7 +7,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { TransactionListItem } from '../components/ui/TransactionListItem';
 import { Plus, Check, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
-import { gastosFixosService } from '../services/gastosFixos';
+import { gastosFixosService, isGastoFixoPago } from '../services/gastosFixos';
 import type { GastoFixoMensal } from '../types/database.types';
 
 export function GastosFixos() {
@@ -59,8 +59,8 @@ export function GastosFixos() {
 
   // Cálculos do Resumo Mensal
   const totalPrevisto = gastos.reduce((acc, g) => acc + (g.registro_atual?.valor_previsto_ajustado || g.valor_previsto_base), 0);
-  const totalRealizado = gastos.reduce((acc, g) => acc + (g.registro_atual?.valor_real || 0), 0);
-  const naoInformadas = gastos.filter(g => !g.registro_atual?.valor_real || g.registro_atual.valor_real === 0).length;
+  const totalRealizado = gastos.reduce((acc, g) => acc + (isGastoFixoPago(g.registro_atual) ? Number(g.registro_atual?.valor_real || 0) : 0), 0);
+  const naoInformadas = gastos.filter(g => !isGastoFixoPago(g.registro_atual)).length;
 
   const getStatusColorGlobally = () => {
     if (totalRealizado === 0) return 'var(--text-muted)';
@@ -102,19 +102,19 @@ export function GastosFixos() {
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!gastoToEdit || !editNome || editValor <= 0) return;
+    if (!gastoToEdit || !editNome || editValor < 0) return;
 
     try {
       setIsSubmitting(true);
       
       if (editMode === 'allMonths') {
         await gastosFixosService.updateGastoFixo(gastoToEdit.id, editNome, editValor, editDiaPagamentoPrevisto);
-        const vr = gastoToEdit.registro_atual?.valor_real || 0;
+        const vr = gastoToEdit.registro_atual?.valor_real ?? null;
         const dr = gastoToEdit.registro_atual?.dia_pagamento_real || null;
         await gastosFixosService.upsertRegistro(gastoToEdit.id, mesAno, vr, null, dr);
       } else {
         await gastosFixosService.updateGastoFixo(gastoToEdit.id, editNome, gastoToEdit.valor_previsto_base, editDiaPagamentoPrevisto);
-        const vr = gastoToEdit.registro_atual?.valor_real || 0;
+        const vr = gastoToEdit.registro_atual?.valor_real ?? null;
         const dr = gastoToEdit.registro_atual?.dia_pagamento_real || null;
         await gastosFixosService.upsertRegistro(gastoToEdit.id, mesAno, vr, editValor, dr);
       }
@@ -131,8 +131,9 @@ export function GastosFixos() {
   const handleOpenPay = (gasto: GastoFixoMensal) => {
     setGastoToPay(gasto);
     const previsto = gasto.registro_atual?.valor_previsto_ajustado || gasto.valor_previsto_base;
-    const real = gasto.registro_atual?.valor_real || 0;
-    setPayValor(real > 0 ? real : previsto);
+    const isPaid = isGastoFixoPago(gasto.registro_atual);
+    const real = gasto.registro_atual?.valor_real ?? 0;
+    setPayValor(isPaid ? Number(real) : previsto);
 
     if (gasto.registro_atual?.data_pagamento_real) {
       setPayData(gasto.registro_atual.data_pagamento_real);
@@ -187,13 +188,10 @@ export function GastosFixos() {
     if (!gastoToPay) return;
     try {
       setIsSubmitting(true);
-      await gastosFixosService.upsertRegistro(
+      await gastosFixosService.clearPagamento(
         gastoToPay.id,
         mesAno,
-        0,
-        gastoToPay.registro_atual?.valor_previsto_ajustado || null,
-        null,
-        null
+        gastoToPay.registro_atual?.valor_previsto_ajustado || null
       );
       await fetchGastos();
       setIsPayModalOpen(false);
@@ -491,7 +489,7 @@ export function GastosFixos() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '1rem' }}>
-              {gastoToPay.registro_atual?.valor_real && gastoToPay.registro_atual.valor_real > 0 ? (
+              {gastoToPay && isGastoFixoPago(gastoToPay.registro_atual) ? (
                 <Button type="button" variant="outline" onClick={handleClearPay} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }} disabled={isSubmitting}>
                   Limpar Pagamento
                 </Button>
@@ -532,19 +530,19 @@ function GastoRow({
   onDelete: () => void,
 }) {
   const previstoEfetivo = gasto.registro_atual?.valor_previsto_ajustado || gasto.valor_previsto_base;
-  const realPago = gasto.registro_atual?.valor_real || 0;
+  const isPaid = isGastoFixoPago(gasto.registro_atual);
+  const realPago = isPaid ? Number(gasto.registro_atual?.valor_real ?? 0) : 0;
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const getStatusColor = () => {
-    if (realPago === 0) return 'var(--text-muted)';
-    if (previstoEfetivo === 0) return realPago > 0 ? 'var(--danger)' : 'var(--text-muted)';
+    if (!isPaid) return 'var(--text-muted)';
+    if (previstoEfetivo === 0) return realPago > 0 ? 'var(--danger)' : 'var(--success)';
     const pct = realPago / previstoEfetivo;
     if (pct <= 1.0) return 'var(--success)';
     return 'var(--danger)';
   };
 
-  const isPaid = realPago > 0;
   const stateClass = isPaid ? 'gasto-row-ja-paga' : 'gasto-row-aberta';
 
   return (

@@ -8,7 +8,7 @@ import { Modal } from '../components/ui/Modal';
 import { Link } from 'react-router-dom';
 import { Wallet, CalendarDays, CreditCard, ArrowRight, TrendingUp, TrendingDown, Loader2, PiggyBank } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
-import { gastosFixosService } from '../services/gastosFixos';
+import { gastosFixosService, isGastoFixoPago } from '../services/gastosFixos';
 import { gastosDiariosService } from '../services/gastosDiarios';
 import { parcelasService, getParcelaCartaoInfo } from '../services/parcelas';
 import { entradasService } from '../services/entradas';
@@ -84,15 +84,15 @@ export function Dashboard() {
       // 2. Gastos Fixos
       const fMensais = await gastosFixosService.fetchGastosMensais(mesAno);
       const fPrev = fMensais.reduce((acc, g) => acc + (g.registro_atual?.valor_previsto_ajustado || g.valor_previsto_base), 0);
-      const fReal = fMensais.reduce((acc, g) => acc + (g.registro_atual?.valor_real || 0), 0);
+      const fReal = fMensais.reduce((acc, g) => acc + (isGastoFixoPago(g.registro_atual) ? Number(g.registro_atual?.valor_real || 0) : 0), 0);
       const fRealProj = fMensais.reduce((acc, g) => {
-        const isPaid = g.registro_atual?.valor_real !== undefined && g.registro_atual?.valor_real !== null && g.registro_atual?.valor_real > 0;
+        const isPaid = isGastoFixoPago(g.registro_atual);
         const value = isPaid 
-          ? g.registro_atual!.valor_real 
+          ? Number(g.registro_atual!.valor_real ?? 0) 
           : (g.registro_atual?.valor_previsto_ajustado || g.valor_previsto_base);
         return acc + value;
       }, 0);
-      const fNaoInf = fMensais.filter(g => !g.registro_atual?.valor_real || g.registro_atual.valor_real === 0).length;
+      const fNaoInf = fMensais.filter(g => !isGastoFixoPago(g.registro_atual)).length;
       setFixosPrevisto(fPrev);
       setFixosRealizado(fReal);
       setFixosExecutadoProjetado(fRealProj);

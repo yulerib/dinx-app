@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { GastoFixo, RegistroGastoFixo, CategoriaDiaria, RegistroDiario, CompraParcelada, Configuracao } from '../types/database.types';
-import { getLocalYearMonth } from './gastosFixos';
+import { getLocalYearMonth, isGastoFixoPago } from './gastosFixos';
 
 export interface ChartDataPoint {
   mesAno: string;      // ex: "2026-05"
@@ -199,7 +199,7 @@ export const chartsService = {
           fixosProj += previsto;
           
           if (!isFuture) {
-            fixosExec += reg ? reg.valor_real : 0;
+            fixosExec += isGastoFixoPago(reg) ? Number(reg!.valor_real ?? 0) : 0;
           }
         }
       });
@@ -384,10 +384,11 @@ export const chartsService = {
 
       fixosVigentes.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
-        if (reg) {
-          fixedM += Number(reg.valor_real);
+        const isPaid = isGastoFixoPago(reg);
+        if (isPaid) {
+          fixedM += Number(reg!.valor_real ?? 0);
         } else if (f.ativo) {
-          fixedM += Number(f.valor_previsto_base);
+          fixedM += (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
         }
       });
 
@@ -529,12 +530,12 @@ export const chartsService = {
       let fixedDay = 0;
       activeFixos.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso);
-        const hasRealPaid = reg && reg.valor_real > 0;
+        const isPaid = isGastoFixoPago(reg);
         
-        if (hasRealPaid) {
+        if (isPaid) {
           const paidDay = (reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0) ? reg!.dia_pagamento_real : f.dia_pagamento_previsto;
           if (paidDay === d) {
-            fixedDay += Number(reg!.valor_real);
+            fixedDay += Number(reg!.valor_real ?? 0);
           }
         } else {
           if (f.dia_pagamento_previsto === d) {
@@ -723,10 +724,11 @@ export const chartsService = {
 
       fixosVigentes.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
-        if (reg) {
-          fixedM += Number(reg.valor_real);
+        const isPaid = isGastoFixoPago(reg);
+        if (isPaid) {
+          fixedM += Number(reg!.valor_real ?? 0);
         } else if (f.ativo) {
-          fixedM += Number(f.valor_previsto_base);
+          fixedM += (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
         }
       });
 
@@ -891,8 +893,12 @@ export const chartsService = {
       });
       fixosVigentes.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
-        if (reg) fixedM += Number(reg.valor_real);
-        else if (f.ativo) fixedM += Number(f.valor_previsto_base);
+        const isPaid = isGastoFixoPago(reg);
+        if (isPaid) {
+          fixedM += Number(reg!.valor_real ?? 0);
+        } else if (f.ativo) {
+          fixedM += (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
+        }
       });
 
       const dailyM = (dbRegistrosDiarios || []).filter(r => r.data.substring(0, 7) === m).reduce((sum, r) => sum + Number(r.valor_gasto), 0);
@@ -1063,11 +1069,11 @@ export const chartsService = {
       // Fixed expenses
       activeFixos.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso);
-        const hasReal = reg && reg.valor_real !== null && reg.valor_real !== undefined;
-        if (hasReal) {
+        const isPaid = isGastoFixoPago(reg);
+        if (isPaid) {
           const paidDay = (reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0) ? reg!.dia_pagamento_real : f.dia_pagamento_previsto;
           if (paidDay === d) {
-            saidasFixas.push({ descricao: f.nome, valor: Number(reg!.valor_real), isExecutado: true });
+            saidasFixas.push({ descricao: f.nome, valor: Number(reg!.valor_real ?? 0), isExecutado: true });
           }
         } else {
           if (f.dia_pagamento_previsto === d) {

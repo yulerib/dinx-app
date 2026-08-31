@@ -12,7 +12,7 @@ export interface RegistroGastoFixo {
   id_gasto_fixo: string;
   mes_ano: string;
   valor_previsto_ajustado: number | null;
-  valor_real: number;
+  valor_real: number | null;
   dia_pagamento_real: number | null;
   data_pagamento_real: string | null;
   created_at: string;
