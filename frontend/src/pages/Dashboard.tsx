@@ -60,7 +60,14 @@ export function Dashboard() {
 
   // Modal para Pagar Fatura do Cartão
   const [isCCPaymentModalOpen, setIsCCPaymentModalOpen] = useState(false);
-  const [diaPagamentoCCInput, setDiaPagamentoCCInput] = useState<number>(new Date().getDate());
+  const getInitialCCPaymentDate = () => {
+    const today = new Date();
+    const todayY = today.getFullYear();
+    const todayM = String(today.getMonth() + 1).padStart(2, '0');
+    const todayD = String(today.getDate()).padStart(2, '0');
+    return `${todayY}-${todayM}-${todayD}`;
+  };
+  const [dataPagamentoCCInput, setDataPagamentoCCInput] = useState<string>(getInitialCCPaymentDate());
 
   const fetchData = async () => {
     try {
@@ -637,7 +644,11 @@ export function Dashboard() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
                       <span className="text-muted">Fatura Anterior ({prevMesAnoFormatado}):</span>
                       <span style={{ fontWeight: 600, color: faturaPrevStatus?.pago ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)' }}>
-                        {formatBRL(ccBillPreviousMonth)} ({faturaPrevStatus?.pago ? 'Paga' : 'Aberta'})
+                        {formatBRL(ccBillPreviousMonth)} ({faturaPrevStatus?.pago ? (
+                          faturaPrevStatus.data_pagamento_real
+                            ? `Paga em ${faturaPrevStatus.data_pagamento_real.split('-').reverse().join('/')}`
+                            : `Paga no dia ${faturaPrevStatus.dia_pagamento_real}`
+                        ) : 'Aberta'})
                       </span>
                     </div>
                     
@@ -649,7 +660,7 @@ export function Dashboard() {
                           </span>
                           <Button 
                             onClick={() => {
-                              setDiaPagamentoCCInput(new Date().getDate());
+                              setDataPagamentoCCInput(getInitialCCPaymentDate());
                               setIsCCPaymentModalOpen(true);
                             }} 
                             disabled={isSubmitting}
@@ -662,7 +673,7 @@ export function Dashboard() {
                         <div style={{ marginTop: '0.75rem' }}>
                           <Button 
                             onClick={() => {
-                              setDiaPagamentoCCInput(new Date().getDate());
+                              setDataPagamentoCCInput(getInitialCCPaymentDate());
                               setIsCCPaymentModalOpen(true);
                             }} 
                             disabled={isSubmitting}
@@ -720,30 +731,28 @@ export function Dashboard() {
       <Modal isOpen={isCCPaymentModalOpen} onClose={() => setIsCCPaymentModalOpen(false)} title="Confirmar Pagamento de Fatura">
         <div>
           <p style={{ marginBottom: '1rem', lineHeight: '1.5' }}>
-            O pagamento da fatura de <strong>{formatBRL(ccBillPreviousMonth)}</strong> do mês anterior ({prevMesAnoFormatado}) será registrado como tendo sido efetuado hoje, dia <strong>{new Date().getDate()}</strong>, ou você pode informar outra data abaixo:
+            Informe a data em que o pagamento da fatura de <strong>{formatBRL(ccBillPreviousMonth)}</strong> ({prevMesAnoFormatado}) foi ou será efetuado:
           </p>
           
           <div className="input-group">
-            <label>Dia do Pagamento</label>
-            <select 
+            <label>Data do Pagamento</label>
+            <input 
+              type="date" 
               className="input" 
-              value={diaPagamentoCCInput} 
-              onChange={e => setDiaPagamentoCCInput(Number(e.target.value))}
-              style={{ appearance: 'auto', cursor: 'pointer' }}
+              value={dataPagamentoCCInput} 
+              onChange={e => setDataPagamentoCCInput(e.target.value)}
               required
-            >
-              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                <option key={day} value={day}>{day}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
             <Button type="button" variant="outline" onClick={() => setIsCCPaymentModalOpen(false)}>Cancelar</Button>
             <Button onClick={async () => {
+              if (!dataPagamentoCCInput) return;
               try {
                 setIsSubmitting(true);
-                await parcelasService.upsertPagamentoFatura(prevMesAno, true, diaPagamentoCCInput, ccBillPreviousMonth);
+                const diaReal = Number(dataPagamentoCCInput.split('-')[2]);
+                await parcelasService.upsertPagamentoFatura(prevMesAno, true, diaReal, ccBillPreviousMonth, dataPagamentoCCInput);
                 await fetchData();
                 setIsCCPaymentModalOpen(false);
                 alert('Pagamento registrado com sucesso!');
@@ -752,7 +761,7 @@ export function Dashboard() {
               } finally {
                 setIsSubmitting(false);
               }
-            }} disabled={isSubmitting}>
+            }} disabled={isSubmitting || !dataPagamentoCCInput}>
               {isSubmitting ? <Loader2 className="animate-spin" size={14} style={{ marginRight: '0.25rem' }} /> : null}
               Confirmar Pagamento
             </Button>

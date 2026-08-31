@@ -31,14 +31,6 @@ export function Extrato() {
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  const getMesAnoAnterior = (mStr: string): string => {
-    const [y, m] = mStr.split('-').map(Number);
-    const date = new Date(y, m - 2, 1);
-    const newY = date.getFullYear();
-    const newM = String(date.getMonth() + 1).padStart(2, '0');
-    return `${newY}-${newM}`;
-  };
-
 
   const addMonths = (mesAno: string, count: number): string => {
     const [y, m] = mesAno.split('-').map(Number);
@@ -228,14 +220,20 @@ export function Extrato() {
           .filter(r => r.data.substring(0, 7) === m)
           .reduce((sum, r) => sum + Number(r.valor_gasto), 0);
 
-        // Fatura Cartão M-1 paga em M
-        const m1 = getMesAnoAnterior(m);
-        const faturaM1 = comprasParceladas.filter(compra => {
-          return getParcelaCartaoInfo(compra, m1).ativa;
-        }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
-
-        const pagoFaturaM1 = pagamentosFaturas.find(f => f.mes_ano === m1 && f.pago === true);
-        const ccM = pagoFaturaM1 ? faturaM1 : 0;
+        // Fatura Cartão paga em M
+        let ccM = 0;
+        pagamentosFaturas.filter(f => f.pago).forEach(f => {
+          const dataPago = f.data_pagamento_real;
+          const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(f.mes_ano, 1);
+          if (physicalMonth === m) {
+            const faturaVal = (f.valor_pago && Number(f.valor_pago) > 0)
+              ? Number(f.valor_pago)
+              : comprasParceladas.filter(compra => {
+                  return getParcelaCartaoInfo(compra, f.mes_ano).ativa;
+                }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+            ccM += faturaVal;
+          }
+        });
 
         // Reserva
         let reservaInflowsM = 0;
@@ -384,28 +382,36 @@ export function Extrato() {
         }
       });
 
-      // D. Fatura Cartão de Crédito
-      const mesAnoAnterior = getMesAnoAnterior(mesAno);
-      const faturaAnterior = comprasParceladas.filter(compra => {
-        return getParcelaCartaoInfo(compra, mesAnoAnterior).ativa;
-      }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+      // D. Fatura Cartão de Crédito — pagas fisicamente neste mês
+      pagamentosFaturas.filter(f => f.pago).forEach(pagoFatura => {
+        const dataPago = pagoFatura.data_pagamento_real;
+        const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(pagoFatura.mes_ano, 1);
 
-      const pagoFaturaAnterior = pagamentosFaturas.find(f => f.mes_ano === mesAnoAnterior);
-      const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
-      const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;
+        if (physicalMonth === mesAno) {
+          const diaPago = dataPago ? Number(dataPago.split('-')[2]) : (pagoFatura.dia_pagamento_real || 10);
+          const faturaVal = (pagoFatura.valor_pago && Number(pagoFatura.valor_pago) > 0)
+            ? Number(pagoFatura.valor_pago)
+            : comprasParceladas.filter(compra => {
+                return getParcelaCartaoInfo(compra, pagoFatura.mes_ano).ativa;
+              }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
 
-      if (faturaAnterior > 0 && ccPaid && ccDiaPagamentoReal !== null) {
-        listMovimentos.push({
-          id: `fatura-${mesAnoAnterior}-pago`,
-          dia: ccDiaPagamentoReal,
-          descricao: 'Fatura Cartão Mês Anterior (Paga)',
-          tipo: 'outflow',
-          origem: 'fatura',
-          status: 'pago',
-          valor: faturaAnterior,
-          createdAt: pagoFaturaAnterior!.created_at
-        });
-      }
+          if (faturaVal > 0) {
+            const [fy, fm] = pagoFatura.mes_ano.split('-').map(Number);
+            const mesesPt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            const compLabel = `${mesesPt[fm - 1]}/${String(fy).slice(-2)}`;
+            listMovimentos.push({
+              id: `fatura-${pagoFatura.mes_ano}-pago`,
+              dia: diaPago,
+              descricao: `Fatura Cartão (${compLabel}) (Paga)`,
+              tipo: 'outflow',
+              origem: 'fatura',
+              status: 'pago',
+              valor: faturaVal,
+              createdAt: pagoFatura.created_at
+            });
+          }
+        }
+      });
 
       // E. Gastos Diários
       const catsComLimite = categoriasDiarias.filter(c => Number(c.limite_mensal) > 0);

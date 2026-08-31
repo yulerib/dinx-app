@@ -31,7 +31,14 @@ export function CartaoCredito() {
 
   // Fatura do Mês Anterior
   const [pagamentoFaturaAnterior, setPagamentoFaturaAnterior] = useState<PagamentoFatura | null>(null);
-  const [diaPagamentoRealInput, setDiaPagamentoRealInput] = useState<number>(10);
+  const getInitialPaymentDate = () => {
+    const today = new Date();
+    const todayY = today.getFullYear();
+    const todayM = String(today.getMonth() + 1).padStart(2, '0');
+    const todayD = String(today.getDate()).padStart(2, '0');
+    return `${todayY}-${todayM}-${todayD}`;
+  };
+  const [dataPagamentoRealInput, setDataPagamentoRealInput] = useState<string>(getInitialPaymentDate());
   const [isPayingFatura, setIsPayingFatura] = useState(false);
   const [isCCPaymentModalOpen, setIsCCPaymentModalOpen] = useState(false);
 
@@ -441,7 +448,11 @@ export function CartaoCredito() {
               {pagamentoFaturaAnterior?.pago ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-                    Paga no dia <strong>{pagamentoFaturaAnterior.dia_pagamento_real}</strong>
+                    {pagamentoFaturaAnterior.data_pagamento_real ? (
+                      <>Paga em: <strong>{pagamentoFaturaAnterior.data_pagamento_real.split('-').reverse().join('/')}</strong></>
+                    ) : (
+                      <>Paga no dia <strong>{pagamentoFaturaAnterior.dia_pagamento_real}</strong></>
+                    )}
                   </span>
                   <Button variant="outline" onClick={handleReabrirFatura} disabled={isPayingFatura}>
                     Reabrir Fatura
@@ -449,7 +460,7 @@ export function CartaoCredito() {
                 </div>
               ) : (
                 <Button onClick={() => {
-                  setDiaPagamentoRealInput(new Date().getDate());
+                  setDataPagamentoRealInput(getInitialPaymentDate());
                   setIsCCPaymentModalOpen(true);
                 }} disabled={isPayingFatura}>
                   Pagar Fatura
@@ -985,34 +996,33 @@ export function CartaoCredito() {
       <Modal isOpen={isCCPaymentModalOpen} onClose={() => setIsCCPaymentModalOpen(false)} title="Confirmar Pagamento de Fatura">
         <div>
           <p style={{ marginBottom: '1rem', lineHeight: '1.5' }}>
-            O pagamento da fatura de <strong>{formatBRL(valorFaturaAnterior)}</strong> do mês anterior ({formatMesAnoAbreviado(mesAnoAnterior)}) será registrado como tendo sido efetuado hoje, dia <strong>{new Date().getDate()}</strong>, ou você pode informar outra data abaixo:
+            Informe a data em que o pagamento da fatura de <strong>{formatBRL(valorFaturaAnterior)}</strong> ({formatMesAnoAbreviado(mesAnoAnterior)}) foi ou será efetuado:
           </p>
           
           <div className="input-group">
-            <label>Dia do Pagamento</label>
-            <select 
+            <label>Data do Pagamento</label>
+            <input 
+              type="date" 
               className="input" 
-              value={diaPagamentoRealInput} 
-              onChange={e => setDiaPagamentoRealInput(Number(e.target.value))}
-              style={{ appearance: 'auto', cursor: 'pointer' }}
+              value={dataPagamentoRealInput} 
+              onChange={e => setDataPagamentoRealInput(e.target.value)}
               required
-            >
-              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                <option key={day} value={day}>{day}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
             <Button type="button" variant="outline" onClick={() => setIsCCPaymentModalOpen(false)}>Cancelar</Button>
             <Button onClick={async () => {
+              if (!dataPagamentoRealInput) return;
               try {
                 setIsPayingFatura(true);
+                const diaReal = Number(dataPagamentoRealInput.split('-')[2]);
                 await parcelasService.upsertPagamentoFatura(
                   mesAnoAnterior,
                   true,
-                  diaPagamentoRealInput,
-                  valorFaturaAnterior
+                  diaReal,
+                  valorFaturaAnterior,
+                  dataPagamentoRealInput
                 );
                 const pag = await parcelasService.fetchPagamentoFatura(mesAnoAnterior);
                 setPagamentoFaturaAnterior(pag);
@@ -1025,7 +1035,7 @@ export function CartaoCredito() {
               } finally {
                 setIsPayingFatura(false);
               }
-            }} disabled={isPayingFatura}>
+            }} disabled={isPayingFatura || !dataPagamentoRealInput}>
               {isPayingFatura ? <Loader2 className="animate-spin" size={14} style={{ marginRight: '0.25rem' }} /> : null}
               Confirmar Pagamento
             </Button>

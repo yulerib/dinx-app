@@ -121,6 +121,7 @@ export interface PagamentoFatura {
   mes_ano: string; // YYYY-MM
   pago: boolean;
   dia_pagamento_real: number | null;
+  data_pagamento_real?: string | null;
   valor_pago: number;
   created_at: string;
 }

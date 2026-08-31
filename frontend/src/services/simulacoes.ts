@@ -250,10 +250,21 @@ export const simulacoesService = {
         .filter(r => r.data.substring(0, 7) === m)
         .reduce((sum, r) => sum + Number(r.valor_gasto), 0);
 
-      const m1 = getMesAnoAnterior(m);
-      const faturaM1 = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, m1, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
-      const pagoFaturaM1 = (dbPagamentosFaturas || []).find(f => f.mes_ano === m1 && f.pago === true);
-      const ccM = pagoFaturaM1 ? faturaM1 : 0;
+      // Fatura Cartão paga em M
+      let ccM = 0;
+      (dbPagamentosFaturas || []).filter(f => f.pago).forEach(f => {
+        const dataPago = f.data_pagamento_real;
+        const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(f.mes_ano, 1);
+        if (physicalMonth === m) {
+          const faturaVal = (f.valor_pago && Number(f.valor_pago) > 0)
+            ? Number(f.valor_pago)
+            : (dbComprasParceladas || []).filter(compra => {
+                const p = getParcelaAtual(compra.mes_ano_inicio, f.mes_ano, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim);
+                return p !== null;
+              }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+          ccM += faturaVal;
+        }
+      });
 
       let reservaInflowsM = 0;
       let reservaOutflowsM = 0;
@@ -412,31 +423,66 @@ export const simulacoesService = {
       });
     });
 
-    // e) Fatura do Cartão (Mês anterior paga neste mês)
+    // e) Fatura do Cartão (pagas neste mês ou prevista para este mês)
     const mesAnoAnterior = getMesAnoAnterior(currentMonthIso);
     const [prevY, prevMo] = mesAnoAnterior.split('-').map(Number);
     const prevMonthLabel = `${mesesAbrev[prevMo - 1]}/${String(prevY).slice(-2)}`;
     const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
     const pagoFaturaAnterior = (dbPagamentosFaturas || []).find(f => f.mes_ano === mesAnoAnterior);
     const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
-    const ccDiaPagamentoReal = pagoFaturaAnterior ? pagoFaturaAnterior.dia_pagamento_real : null;
+    const ccDiaPagamentoReal = pagoFaturaAnterior ? (pagoFaturaAnterior.data_pagamento_real ? Number(pagoFaturaAnterior.data_pagamento_real.split('-')[2]) : pagoFaturaAnterior.dia_pagamento_real) : null;
     const ccValue = (pagoFaturaAnterior && Number(pagoFaturaAnterior.valor_pago) > 0) ? Number(pagoFaturaAnterior.valor_pago) : faturaAnterior;
     const ccDia = ccPaid ? (ccDiaPagamentoReal || 10) : 10;
+    (dbPagamentosFaturas || []).filter(f => f.pago).forEach(pagoFatura => {
+      const dataPago = pagoFatura.data_pagamento_real;
+      const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(pagoFatura.mes_ano, 1);
+      if (physicalMonth === currentMonthIso) {
+        const ccDia = dataPago ? Number(dataPago.split('-')[2]) : (pagoFatura.dia_pagamento_real || 10);
+        const ccValue = (pagoFatura.valor_pago && Number(pagoFatura.valor_pago) > 0)
+          ? Number(pagoFatura.valor_pago)
+          : (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, pagoFatura.mes_ano, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+        const [fy, fm] = pagoFatura.mes_ano.split('-').map(Number);
+        const fLabel = `${mesesAbrev[fm - 1]}/${String(fy).slice(-2)}`;
 
-    if (faturaAnterior > 0 || (ccPaid && ccValue > 0)) {
+        items.push({
+          id: `fatura_cartao_${pagoFatura.mes_ano}`,
+          origemId: pagoFatura.id,
+          tipo: 'cartao',
+          descricao: `Fatura Cartão (${fLabel})`,
+          valorOriginal: ccValue,
+          valorSimulado: ccValue,
+          diaPrevistoOriginal: ccDia,
+          diaSimulado: ccDia,
+          isOficialEfetuado: true,
+          isCustom: false,
+          ativo: true,
+          detalhes: dataPago ? `Fatura paga em ${dataPago.split('-').reverse().join('/')}` : 'Fatura paga'
+        });
+      }
+    });
+
+    // Se a fatura do mês anterior não foi paga até/neste mês, adicionar como a vencer dia 10
+    const isM1SimPaidInOrBefore = (dbPagamentosFaturas || []).some(f => {
+      if (f.mes_ano !== mesAnoAnterior || !f.pago) return false;
+      const dataPago = f.data_pagamento_real;
+      const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(f.mes_ano, 1);
+      return physicalMonth <= currentMonthIso;
+    });
+
+    if (!isM1SimPaidInOrBefore && faturaAnterior > 0) {
       items.push({
         id: `fatura_cartao_${mesAnoAnterior}`,
-        origemId: pagoFaturaAnterior?.id,
+        origemId: undefined,
         tipo: 'cartao',
         descricao: `Fatura Cartão (${prevMonthLabel})`,
-        valorOriginal: ccValue,
-        valorSimulado: ccValue,
-        diaPrevistoOriginal: ccDia,
-        diaSimulado: ccDia,
-        isOficialEfetuado: ccPaid,
+        valorOriginal: faturaAnterior,
+        valorSimulado: faturaAnterior,
+        diaPrevistoOriginal: 10,
+        diaSimulado: 10,
+        isOficialEfetuado: false,
         isCustom: false,
         ativo: true,
-        detalhes: ccPaid ? 'Fatura paga' : 'Fatura a vencer dia 10'
+        detalhes: 'Fatura a vencer dia 10'
       });
     }
 

@@ -271,7 +271,13 @@ export const parcelasService = {
     return data || null;
   },
 
-  async upsertPagamentoFatura(mesAno: string, pago: boolean, diaPagamentoReal: number | null, valorPago: number): Promise<void> {
+  async upsertPagamentoFatura(
+    mesAno: string, 
+    pago: boolean, 
+    diaPagamentoReal: number | null, 
+    valorPago: number,
+    dataPagamentoReal?: string | null
+  ): Promise<void> {
     const existing = await this.fetchPagamentoFatura(mesAno);
     if (existing) {
       const { error } = await supabase
@@ -279,7 +285,8 @@ export const parcelasService = {
         .update({
           pago,
           dia_pagamento_real: diaPagamentoReal,
-          valor_pago: valorPago
+          valor_pago: valorPago,
+          data_pagamento_real: dataPagamentoReal ?? null
         })
         .eq('id', existing.id);
       if (error) throw error;
@@ -290,7 +297,8 @@ export const parcelasService = {
           mes_ano: mesAno,
           pago,
           dia_pagamento_real: diaPagamentoReal,
-          valor_pago: valorPago
+          valor_pago: valorPago,
+          data_pagamento_real: dataPagamentoReal ?? null
         }]);
       if (error) throw error;
     }

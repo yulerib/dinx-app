@@ -90,6 +90,7 @@ CREATE TABLE public.pagamentos_faturas (
     mes_ano TEXT NOT NULL, -- Formato YYYY-MM
     pago BOOLEAN NOT NULL DEFAULT FALSE,
     dia_pagamento_real INTEGER,
+    data_pagamento_real DATE,
     valor_pago NUMERIC NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
