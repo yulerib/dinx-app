@@ -358,6 +358,34 @@
   border: 1px solid rgba(168, 85, 247, 0.2);
 }
 
+.sim-badge-adjusted {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.sim-item-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sim-item-reset-btn:hover {
+  background: var(--bg-muted);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
 .sim-item-details {
   font-size: 0.725rem;
   color: var(--text-muted);

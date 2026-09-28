@@ -10,11 +10,11 @@ import {
   TrendingDown,
   RotateCcw,
   Plus,
-  Lock,
   Calendar,
   Sparkles,
   Eye,
-  Sliders
+  Sliders,
+  Check
 } from 'lucide-react';
 import './Simulacoes.css';
 
@@ -46,6 +46,9 @@ export function Simulacoes() {
   const [newValor, setNewValor] = useState<number>(0);
   const [newDia, setNewDia] = useState<number>(15);
 
+  // Reset confirmation modal
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
   // Mobile detection
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
   useEffect(() => {
@@ -54,15 +57,29 @@ export function Simulacoes() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Fetch Base Data
+  // Fetch Base Data and load any ongoing simulation for this month
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const data = await simulacoesService.loadBaseData(currentMonth);
+
+      // Aplica saldo inicial herdado de simulações de meses anteriores (se houver)
+      const simulatedOpening = simulacoesService.getSimulatedOpeningBalance(mesAno, data.saldoInicialConta);
+      data.saldoInicialConta = simulatedOpening;
+
       setBaseData(data);
-      setSimulatedItems(data.items.map(item => ({ ...item })));
-      setLimiteDiarioSimulado(data.limiteDiarioPadrao);
-      setCustomDailyExpenses({});
+
+      // Verifica se este mês já tem simulação salva em andamento
+      const existingSimulation = simulacoesService.getMonthSimulation(mesAno);
+      if (existingSimulation && existingSimulation.isModified) {
+        setSimulatedItems(existingSimulation.items.map(item => ({ ...item })));
+        setLimiteDiarioSimulado(existingSimulation.limiteDiarioSimulado);
+        setCustomDailyExpenses({ ...existingSimulation.customDailyExpenses });
+      } else {
+        setSimulatedItems(data.items.map(item => ({ ...item })));
+        setLimiteDiarioSimulado(data.limiteDiarioPadrao);
+        setCustomDailyExpenses({});
+      }
     } catch (error) {
       console.error('Erro ao carregar dados para simulação:', error);
     } finally {
@@ -102,12 +119,77 @@ export function Simulacoes() {
     );
   }, [baseData, simulatedItems, limiteDiarioSimulado, customDailyExpenses]);
 
-  // Reset to Original Baseline
-  const handleReset = () => {
+  // Salva continuamente o estado da simulação do mês atual no store
+  useEffect(() => {
+    if (!baseData || isLoading) return;
+
+    const hasItemChanges = simulatedItems.some(item => {
+      if (item.isCustom) return true;
+      const baseItem = baseData.items.find(b => b.id === item.id);
+      if (!baseItem) return true;
+      return (
+        item.valorSimulado !== baseItem.valorOriginal ||
+        item.diaSimulado !== baseItem.diaPrevistoOriginal ||
+        item.ativo !== baseItem.ativo
+      );
+    }) || simulatedItems.length !== baseData.items.length;
+
+    const hasDailyLimitChanges = limiteDiarioSimulado !== baseData.limiteDiarioPadrao;
+    const hasCustomDaily = Object.keys(customDailyExpenses).length > 0;
+    const isModified = hasItemChanges || hasDailyLimitChanges || hasCustomDaily;
+
+    if (isModified || simSummary.saldoFinalSimulado !== simSummary.saldoFinalOficial) {
+      simulacoesService.saveMonthSimulation(mesAno, {
+        mesAno,
+        items: simulatedItems,
+        limiteDiarioSimulado,
+        customDailyExpenses,
+        isModified: true,
+        saldoFinalSimulado: simSummary.saldoFinalSimulado,
+        saldoFinalOficial: simSummary.saldoFinalOficial
+      });
+    } else {
+      simulacoesService.clearMonthSimulation(mesAno);
+    }
+  }, [simSummary, simulatedItems, limiteDiarioSimulado, customDailyExpenses, baseData, mesAno, isLoading]);
+
+  // Reset Actions
+  const handleOpenReset = () => {
+    const allSimulated = simulacoesService.getAllSimulatedMonths();
+    if (allSimulated.length > 1 || (allSimulated.length === 1 && !allSimulated.includes(mesAno))) {
+      setIsResetModalOpen(true);
+    } else {
+      handleResetCurrentMonth();
+    }
+  };
+
+  const handleResetCurrentMonth = () => {
     if (!baseData) return;
+    simulacoesService.clearMonthSimulation(mesAno);
+    // Recalcula o saldo de abertura caso meses anteriores continuem simulados
+    const simulatedOpening = simulacoesService.getSimulatedOpeningBalance(mesAno, baseData.saldoInicialConta);
+    baseData.saldoInicialConta = simulatedOpening;
     setSimulatedItems(baseData.items.map(item => ({ ...item })));
     setLimiteDiarioSimulado(baseData.limiteDiarioPadrao);
     setCustomDailyExpenses({});
+    setIsResetModalOpen(false);
+  };
+
+  const handleResetAllMonths = () => {
+    simulacoesService.clearAllSimulations();
+    setIsResetModalOpen(false);
+    fetchData();
+  };
+
+  // Reset a single item back to its official value
+  const handleResetItem = (id: string) => {
+    setSimulatedItems(prev =>
+      prev.map(item =>
+        item.id === id
+          ? { ...item, valorSimulado: item.valorOriginal, diaSimulado: item.diaPrevistoOriginal }
+          : item
+      )
+    );
   };
 
   // Change Value of an Item
@@ -191,10 +273,10 @@ export function Simulacoes() {
         <div className="sim-header-actions">
           <Button
             variant="outline"
-            onClick={handleReset}
+            onClick={handleOpenReset}
             disabled={isLoading}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-            title="Restaurar todos os valores para o padrão oficial do banco"
+            title="Restaurar valores da simulação"
           >
             <RotateCcw size={16} />
             Restaurar Padrão
@@ -493,7 +575,8 @@ export function Simulacoes() {
                   </div>
                 ) : (
                   filteredItems.map(item => {
-                    const isLocked = item.isOficialEfetuado;
+                    const isExec = item.isOficialEfetuado;
+                    const isModified = item.valorSimulado !== item.valorOriginal || item.diaSimulado !== item.diaPrevistoOriginal;
 
                     return (
                       <div key={item.id} className="sim-item-row">
@@ -501,66 +584,76 @@ export function Simulacoes() {
                           <div className="sim-item-title-row">
                             <span className="sim-item-title">{item.descricao}</span>
 
-                            {isLocked ? (
-                              <span className="sim-badge sim-badge-locked" title="Lançamento oficial efetuado">
-                                <Lock size={10} />
-                                Oficial
-                              </span>
+                            {isExec ? (
+                              isModified ? (
+                                <span className="sim-badge sim-badge-adjusted" title="Movimentação executada com alteração na simulação">
+                                  <Sliders size={10} />
+                                  Executado (Ajustado)
+                                </span>
+                              ) : (
+                                <span className="sim-badge sim-badge-locked" title="Lançamento oficial executado">
+                                  <Check size={10} />
+                                  Oficial
+                                </span>
+                              )
                             ) : item.isCustom ? (
                               <span className="sim-badge sim-badge-custom">
                                 <Sparkles size={10} />
                                 Extra
                               </span>
-                            ) : (
-                              <span className="sim-badge sim-badge-simulated">
+                            ) : isModified ? (
+                              <span className="sim-badge sim-badge-simulated" title="Valor previsto alterado na simulação">
                                 <Sliders size={10} />
                                 Simulado
+                              </span>
+                            ) : (
+                              <span className="sim-badge sim-badge-locked" title="Previsão padrão">
+                                Previsto
                               </span>
                             )}
                           </div>
 
                           <div className="sim-item-details">
                             {item.tipo === 'entrada' ? 'Receita' : item.tipo === 'cartao' ? 'Fatura Cartão' : 'Despesa'} • {item.detalhes || ''}
-                            {item.valorSimulado !== item.valorOriginal && (
+                            {isModified && (
                               <span style={{ marginLeft: '0.35rem', color: 'var(--primary)', fontWeight: 600 }}>
-                                (Original: {formatBRL(item.valorOriginal)})
+                                ({isExec ? 'Executado' : 'Original'}: {formatBRL(item.valorOriginal)}{item.diaSimulado !== item.diaPrevistoOriginal ? ` no dia ${String(item.diaPrevistoOriginal).padStart(2, '0')}` : ''})
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Controls Column */}
+                        {/* Controls Column: Totalmente editável, mesmo para itens já executados! */}
                         <div className="sim-item-controls">
-                          {isLocked ? (
-                            <div style={{ textAlign: 'right' }}>
-                              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: item.tipo === 'entrada' ? 'var(--color-verde-entradas)' : 'var(--color-vermelho-fixos)' }}>
-                                {formatBRL(item.valorSimulado)}
-                              </span>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                Dia {String(item.diaSimulado).padStart(2, '0')}
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {/* Editable Day */}
-                              <input
-                                type="number"
-                                min={1}
-                                max={baseData?.daysInMonth || 31}
-                                value={item.diaSimulado}
-                                onChange={e => handleChangeDay(item.id, Number(e.target.value))}
-                                className="sim-input-day"
-                                title="Alterar dia previsto na simulação"
-                              />
+                          {/* Editable Day */}
+                          <input
+                            type="number"
+                            min={1}
+                            max={baseData?.daysInMonth || 31}
+                            value={item.diaSimulado}
+                            onChange={e => handleChangeDay(item.id, Number(e.target.value))}
+                            className="sim-input-day"
+                            title="Alterar dia da movimentação na simulação"
+                          />
 
-                              {/* Editable Value with full width */}
-                              <div className="sim-input-currency-wrapper">
-                                <CurrencyInput
-                                  value={item.valorSimulado}
-                                  onChange={val => handleChangeValue(item.id, val)}
-                                />
-                              </div>
-                            </>
+                          {/* Editable Value with full width */}
+                          <div className="sim-input-currency-wrapper">
+                            <CurrencyInput
+                              value={item.valorSimulado}
+                              onChange={val => handleChangeValue(item.id, val)}
+                            />
+                          </div>
+
+                          {/* Reset Item button if altered */}
+                          {isModified && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetItem(item.id)}
+                              className="sim-item-reset-btn"
+                              title={`Restaurar valor ${isExec ? 'executado' : 'original'} (${formatBRL(item.valorOriginal)})`}
+                            >
+                              <RotateCcw size={13} />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -747,16 +840,25 @@ export function Simulacoes() {
                             style={{
                               display: 'flex',
                               justifyContent: 'space-between',
+                              alignItems: 'center',
                               gap: '0.75rem',
                               padding: '0.35rem 0',
                               fontSize: '0.9rem',
                               fontWeight: item.isExecutado ? 600 : 400
                             }}
                           >
-                            <span>
-                              {item.descricao} {item.isExecutado ? '(Oficial)' : '(Simulado)'}
-                            </span>
-                            <span style={{ color: 'var(--color-verde-entradas)' }}>+{formatBRL(item.valor)}</span>
+                            <div>
+                              <span>{item.descricao}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.4rem' }}>
+                                {item.isAjustado ? '(Executado - Ajustado)' : item.isExecutado ? '(Oficial)' : '(Simulado)'}
+                              </span>
+                              {item.isAjustado && item.valorOriginal !== undefined && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  Executado originalmente: {formatBRL(item.valorOriginal)}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ color: 'var(--color-verde-entradas)', fontWeight: 600 }}>+{formatBRL(item.valor)}</span>
                           </div>
                         ))}
                         <div
@@ -794,16 +896,25 @@ export function Simulacoes() {
                             style={{
                               display: 'flex',
                               justifyContent: 'space-between',
+                              alignItems: 'center',
                               gap: '0.75rem',
                               padding: '0.35rem 0',
                               fontSize: '0.9rem',
                               fontWeight: item.isExecutado ? 600 : 400
                             }}
                           >
-                            <span>
-                              {item.descricao} {item.isExecutado ? '(Oficial)' : '(Simulado)'}
-                            </span>
-                            <span style={{ color: 'var(--color-vermelho-fixos)' }}>-{formatBRL(item.valor)}</span>
+                            <div>
+                              <span>{item.descricao}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.4rem' }}>
+                                {item.isAjustado ? '(Executado - Ajustado)' : item.isExecutado ? '(Oficial)' : '(Simulado)'}
+                              </span>
+                              {item.isAjustado && item.valorOriginal !== undefined && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  Executado originalmente: {formatBRL(item.valorOriginal)}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ color: 'var(--color-vermelho-fixos)', fontWeight: 600 }}>-{formatBRL(item.valor)}</span>
                           </div>
                         ))}
                         <div
@@ -841,16 +952,25 @@ export function Simulacoes() {
                             style={{
                               display: 'flex',
                               justifyContent: 'space-between',
+                              alignItems: 'center',
                               gap: '0.75rem',
                               padding: '0.35rem 0',
                               fontSize: '0.9rem',
                               fontWeight: item.isExecutado ? 600 : 400
                             }}
                           >
-                            <span>
-                              {item.descricao} {item.isExecutado ? '(Oficial)' : '(Simulado)'}
-                            </span>
-                            <span style={{ color: 'var(--color-laranja-diarios, var(--warning))' }}>-{formatBRL(item.valor)}</span>
+                            <div>
+                              <span>{item.descricao}</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.4rem' }}>
+                                {item.isAjustado ? '(Executado - Ajustado)' : item.isExecutado ? '(Oficial)' : '(Simulado)'}
+                              </span>
+                              {item.isAjustado && item.valorOriginal !== undefined && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  Executado originalmente: {formatBRL(item.valorOriginal)}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ color: 'var(--color-laranja-diarios, var(--warning))', fontWeight: 600 }}>-{formatBRL(item.valor)}</span>
                           </div>
                         ))}
                         <div
@@ -901,6 +1021,50 @@ export function Simulacoes() {
                 </Modal>
               );
             })()}
+
+          {/* ----------------- MODAL: CONFIRMAR RESTAURAÇÃO DE SIMULAÇÕES ----------------- */}
+          {isResetModalOpen && (
+            <Modal isOpen={true} onClose={() => setIsResetModalOpen(false)} title="Restaurar Simulações">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-color)' }}>
+                  Você possui simulações ativas em múltiplos meses. Como deseja proceder com a restauração?
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+                  <Button
+                    variant="outline"
+                    onClick={handleResetCurrentMonth}
+                    style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem' }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Restaurar Apenas Este Mês ({currentMonth.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })})</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        Mantém as simulações dos outros meses intactas.
+                      </div>
+                    </div>
+                  </Button>
+
+                  <Button
+                    variant="primary"
+                    onClick={handleResetAllMonths}
+                    style={{ justifyContent: 'flex-start', padding: '0.75rem 1rem', backgroundColor: 'var(--color-vermelho-fixos, #ef4444)' }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#ffffff' }}>Restaurar Todos os Meses</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.85)' }}>
+                        Limpa todas as simulações e volta 100% aos dados oficiais do banco.
+                      </div>
+                    </div>
+                  </Button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                  <Button variant="outline" onClick={() => setIsResetModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </>
       )}
     </div>

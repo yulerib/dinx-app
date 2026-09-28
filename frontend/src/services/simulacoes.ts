@@ -8,11 +8,11 @@ export interface SimulatedItem {
   origemId?: string; // original db id if derived from official
   tipo: SimulationCategory;
   descricao: string;
-  valorOriginal: number;
+  valorOriginal: number; // default value (real executed value if already executed, or base projected)
   valorSimulado: number;
   diaPrevistoOriginal: number;
   diaSimulado: number;
-  isOficialEfetuado: boolean; // true = locked, cannot be edited in simulation
+  isOficialEfetuado: boolean; // true = executed in real life (now editable in simulation!)
   isCustom: boolean; // true = added by user in simulation
   ativo: boolean; // user can toggle item on/off in simulation
   detalhes?: string;
@@ -22,15 +22,25 @@ export interface SimulatedDayPoint {
   dia: number;
   diaFormatado: string;
   diaSemana: string;
-  entradas: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[];
-  saidasFixas: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[];
-  saidasDiarias: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[];
+  entradas: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[];
+  saidasFixas: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[];
+  saidasDiarias: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[];
   totalEntradas: number;
   totalSaidasFixas: number;
   totalSaidasDiarias: number;
   saldoConta: number;
   saldoReserva: number;
   isToday: boolean;
+}
+
+export interface MonthSimulationState {
+  mesAno: string;
+  items: SimulatedItem[];
+  limiteDiarioSimulado: number;
+  customDailyExpenses: { [dia: number]: number };
+  isModified: boolean;
+  saldoFinalSimulado: number;
+  saldoFinalOficial: number;
 }
 
 export interface SimulationBaseData {
@@ -124,7 +134,85 @@ const getSalarioForMonth = (dbSalarios: any[], mesAno: string) => {
   return null;
 };
 
+const SESSION_STORAGE_SIM_KEY = 'dinx_simulations_store_v1';
+
+function loadStoredSimulations(): Record<string, MonthSimulationState> {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_SIM_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Erro ao ler simulações do sessionStorage:', e);
+  }
+  return {};
+}
+
+function persistStoredSimulations(store: Record<string, MonthSimulationState>) {
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_SIM_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.error('Erro ao salvar simulações no sessionStorage:', e);
+  }
+}
+
+const simulationsStore: Record<string, MonthSimulationState> = loadStoredSimulations();
+
 export const simulacoesService = {
+  saveMonthSimulation(mesAno: string, state: MonthSimulationState): void {
+    simulationsStore[mesAno] = { ...state };
+    persistStoredSimulations(simulationsStore);
+  },
+
+  getMonthSimulation(mesAno: string): MonthSimulationState | null {
+    return simulationsStore[mesAno] || null;
+  },
+
+  clearMonthSimulation(mesAno: string): void {
+    delete simulationsStore[mesAno];
+    persistStoredSimulations(simulationsStore);
+  },
+
+  clearAllSimulations(): void {
+    Object.keys(simulationsStore).forEach(k => delete simulationsStore[k]);
+    persistStoredSimulations(simulationsStore);
+  },
+
+  getAllSimulatedMonths(): string[] {
+    return Object.keys(simulationsStore).filter(k => simulationsStore[k].isModified);
+  },
+
+  hasActiveSimulations(): boolean {
+    return Object.values(simulationsStore).some(s => s.isModified);
+  },
+
+  /**
+   * Calcula o saldo inicial da simulação de um mês com base nos meses anteriores simulados.
+   * Se o mês anterior direto (M-1) teve simulação com saldo final calculado, usa ele diretamente.
+   * Se o usuário pulou meses, propaga o delta acumulado da simulação mais recente.
+   */
+  getSimulatedOpeningBalance(targetMesAno: string, officialOpeningBalance: number): number {
+    const prevMesAno = getMesAnoAnterior(targetMesAno);
+    const prevSim = simulationsStore[prevMesAno];
+
+    if (prevSim && prevSim.isModified && prevSim.saldoFinalSimulado !== undefined) {
+      return Number(prevSim.saldoFinalSimulado.toFixed(2));
+    }
+
+    // Procura o mês simulado mais recente anterior a targetMesAno
+    const simulatedMonths = Object.keys(simulationsStore)
+      .filter(m => m < targetMesAno && simulationsStore[m].isModified && simulationsStore[m].saldoFinalSimulado !== undefined)
+      .sort();
+
+    if (simulatedMonths.length > 0) {
+      const mostRecent = simulatedMonths[simulatedMonths.length - 1];
+      const recentSim = simulationsStore[mostRecent];
+      const delta = (recentSim.saldoFinalSimulado ?? 0) - (recentSim.saldoFinalOficial ?? 0);
+      return Number((officialOpeningBalance + delta).toFixed(2));
+    }
+
+    return officialOpeningBalance;
+  },
   /**
    * Fetches official data directly from Supabase tables and builds the initial baseline.
    */
@@ -302,20 +390,16 @@ export const simulacoesService = {
 
     // a) Salários
     virtualSalarios.forEach(s => {
-      let physicalMonth = '';
-      let physicalDay = 5;
       let isExec = false;
       let valor = 0;
+      const desvio = s.desvio_mes_deposito ?? 0;
+      const physicalMonth = s.data_real ? s.data_real.substring(0, 7) : addMonths(s.mes_ano, desvio);
+      const diaPrevistoOficial = s.dia_previsto || 5;
 
       if (s.data_real) {
-        physicalMonth = s.data_real.substring(0, 7);
-        physicalDay = Number(s.data_real.split('-')[2]);
         valor = Number(s.valor_real);
         isExec = true;
       } else {
-        const desvio = s.desvio_mes_deposito ?? 0;
-        physicalMonth = addMonths(s.mes_ano, desvio);
-        physicalDay = s.dia_previsto || 5;
         valor = Number(s.valor_previsto);
         isExec = false;
       }
@@ -330,12 +414,12 @@ export const simulacoesService = {
           descricao: desc,
           valorOriginal: valor,
           valorSimulado: valor,
-          diaPrevistoOriginal: physicalDay,
-          diaSimulado: physicalDay,
+          diaPrevistoOriginal: diaPrevistoOficial,
+          diaSimulado: diaPrevistoOficial,
           isOficialEfetuado: isExec,
           isCustom: false,
           ativo: true,
-          detalhes: isExec ? 'Salário recebido' : 'Salário previsto'
+          detalhes: isExec ? `Salário recebido${s.data_real ? ` (dia ${Number(s.data_real.split('-')[2])})` : ''}` : 'Salário previsto'
         });
       }
     });
@@ -403,9 +487,7 @@ export const simulacoesService = {
       const valor = isPaid
         ? Number(reg!.valor_real ?? 0)
         : (reg && reg.valor_previsto_ajustado !== null ? Number(reg.valor_previsto_ajustado) : Number(f.valor_previsto_base));
-      const dia = (isPaid && reg!.dia_pagamento_real && reg!.dia_pagamento_real > 0)
-        ? reg!.dia_pagamento_real
-        : (f.dia_pagamento_previsto || 10);
+      const diaPrevistoOficial = f.dia_pagamento_previsto || 10;
 
       items.push({
         id: `fixo_${f.id}`,
@@ -414,12 +496,12 @@ export const simulacoesService = {
         descricao: f.nome,
         valorOriginal: valor,
         valorSimulado: valor,
-        diaPrevistoOriginal: dia,
-        diaSimulado: dia,
+        diaPrevistoOriginal: diaPrevistoOficial,
+        diaSimulado: diaPrevistoOficial,
         isOficialEfetuado: isPaid,
         isCustom: false,
         ativo: f.ativo ?? true,
-        detalhes: isPaid ? (valor === 0 ? 'Gasto fixo zerado' : 'Gasto fixo pago') : 'Gasto fixo previsto'
+        detalhes: isPaid ? (valor === 0 ? 'Gasto fixo zerado' : (reg!.dia_pagamento_real ? `Gasto fixo pago (dia ${reg!.dia_pagamento_real})` : 'Gasto fixo pago')) : 'Gasto fixo previsto'
       });
     });
 
@@ -430,14 +512,12 @@ export const simulacoesService = {
     const faturaAnterior = (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, mesAnoAnterior, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
     const pagoFaturaAnterior = (dbPagamentosFaturas || []).find(f => f.mes_ano === mesAnoAnterior);
     const ccPaid = pagoFaturaAnterior ? pagoFaturaAnterior.pago : false;
-    const ccDiaPagamentoReal = pagoFaturaAnterior ? (pagoFaturaAnterior.data_pagamento_real ? Number(pagoFaturaAnterior.data_pagamento_real.split('-')[2]) : pagoFaturaAnterior.dia_pagamento_real) : null;
     const ccValue = (pagoFaturaAnterior && Number(pagoFaturaAnterior.valor_pago) > 0) ? Number(pagoFaturaAnterior.valor_pago) : faturaAnterior;
-    const ccDia = ccPaid ? (ccDiaPagamentoReal || 10) : 10;
+    const ccDia = ccPaid && pagoFaturaAnterior ? (pagoFaturaAnterior.data_pagamento_real ? Number(pagoFaturaAnterior.data_pagamento_real.split('-')[2]) : (pagoFaturaAnterior.dia_pagamento_real || 10)) : 10;
     (dbPagamentosFaturas || []).filter(f => f.pago).forEach(pagoFatura => {
       const dataPago = pagoFatura.data_pagamento_real;
       const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(pagoFatura.mes_ano, 1);
       if (physicalMonth === currentMonthIso) {
-        const ccDia = dataPago ? Number(dataPago.split('-')[2]) : (pagoFatura.dia_pagamento_real || 10);
         const ccValue = (pagoFatura.valor_pago && Number(pagoFatura.valor_pago) > 0)
           ? Number(pagoFatura.valor_pago)
           : (dbComprasParceladas || []).filter(compra => getParcelaAtual(compra.mes_ano_inicio, pagoFatura.mes_ano, compra.num_parcelas, compra.recorrente, compra.mes_ano_fim) !== null).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
@@ -451,8 +531,8 @@ export const simulacoesService = {
           descricao: `Fatura Cartão (${fLabel})`,
           valorOriginal: ccValue,
           valorSimulado: ccValue,
-          diaPrevistoOriginal: ccDia,
-          diaSimulado: ccDia,
+          diaPrevistoOriginal: 10,
+          diaSimulado: 10,
           isOficialEfetuado: true,
           isCustom: false,
           ativo: true,
@@ -518,7 +598,7 @@ export const simulacoesService = {
           const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === currentMonthIso);
           const isExec = !!reg;
           const valor = isExec ? Number(reg!.valor_real) : Number(mov.valor_previsto_base);
-          const dia = isExec ? (reg!.dia_movimentacao_real || mov.dia_movimentacao_previsto) : mov.dia_movimentacao_previsto;
+          const diaPrevistoOficial = mov.dia_movimentacao_previsto || 15;
 
           if (valor > 0 || mov.ativo) {
             items.push({
@@ -528,12 +608,12 @@ export const simulacoesService = {
               descricao: `Resgate Reserva: ${mov.descricao}`,
               valorOriginal: valor,
               valorSimulado: valor,
-              diaPrevistoOriginal: dia,
-              diaSimulado: dia,
+              diaPrevistoOriginal: diaPrevistoOficial,
+              diaSimulado: diaPrevistoOficial,
               isOficialEfetuado: isExec,
               isCustom: false,
               ativo: mov.ativo ?? true,
-              detalhes: isExec ? 'Resgate efetuado' : 'Resgate previsto'
+              detalhes: isExec ? (reg!.dia_movimentacao_real ? `Resgate efetuado (dia ${reg!.dia_movimentacao_real})` : 'Resgate efetuado') : 'Resgate previsto'
             });
           }
         }
@@ -559,7 +639,7 @@ export const simulacoesService = {
           const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === currentMonthIso);
           const isExec = !!reg;
           const valor = isExec ? Number(reg!.valor_real) : Number(mov.valor_previsto_base);
-          const dia = isExec ? (reg!.dia_movimentacao_real || mov.dia_movimentacao_previsto) : mov.dia_movimentacao_previsto;
+          const diaPrevistoOficial = mov.dia_movimentacao_previsto || 15;
 
           if (valor > 0 || mov.ativo) {
             items.push({
@@ -569,12 +649,12 @@ export const simulacoesService = {
               descricao: `Depósito Reserva: ${mov.descricao}`,
               valorOriginal: valor,
               valorSimulado: valor,
-              diaPrevistoOriginal: dia,
-              diaSimulado: dia,
+              diaPrevistoOriginal: diaPrevistoOficial,
+              diaSimulado: diaPrevistoOficial,
               isOficialEfetuado: isExec,
               isCustom: false,
               ativo: mov.ativo ?? true,
-              detalhes: isExec ? 'Depósito efetuado' : 'Depósito previsto'
+              detalhes: isExec ? (reg!.dia_movimentacao_real ? `Depósito efetuado (dia ${reg!.dia_movimentacao_real})` : 'Depósito efetuado') : 'Depósito previsto'
             });
           }
         }
@@ -659,9 +739,9 @@ export const simulacoesService = {
       const dayDate = new Date(yearNum, monthNum - 1, d);
       const diaSemana = weekdaysAbrev[dayDate.getDay()];
 
-      const entradas: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[] = [];
-      const saidasFixas: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[] = [];
-      const saidasDiarias: { descricao: string; valor: number; isExecutado: boolean; isSimulado?: boolean }[] = [];
+      const entradas: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[] = [];
+      const saidasFixas: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[] = [];
+      const saidasDiarias: { descricao: string; valor: number; valorOriginal?: number; diaOriginal?: number; isExecutado: boolean; isSimulado?: boolean; isAjustado?: boolean }[] = [];
 
       // 1. Process Simulated Items (Entradas, Fixos, Cartão, Reservas)
       simulatedItems.forEach(item => {
@@ -672,65 +752,65 @@ export const simulacoesService = {
 
         const valor = item.valorSimulado;
         const isExec = item.isOficialEfetuado;
-        const isSim = !isExec || item.isCustom;
+        const isModified = (item.valorSimulado !== item.valorOriginal) || (item.diaSimulado !== item.diaPrevistoOriginal);
+        const isSim = !isExec || item.isCustom || isModified;
+
+        const pointItem = {
+          descricao: item.descricao,
+          valor,
+          valorOriginal: item.valorOriginal,
+          diaOriginal: item.diaPrevistoOriginal,
+          isExecutado: isExec,
+          isSimulado: isSim,
+          isAjustado: isExec && isModified
+        };
 
         if (item.tipo === 'entrada') {
-          entradas.push({
-            descricao: item.descricao,
-            valor,
-            isExecutado: isExec,
-            isSimulado: isSim
-          });
+          entradas.push(pointItem);
         } else if (item.tipo === 'fixo' || item.tipo === 'cartao') {
-          saidasFixas.push({
-            descricao: item.descricao,
-            valor,
-            isExecutado: isExec,
-            isSimulado: isSim
-          });
+          saidasFixas.push(pointItem);
         } else if (item.tipo === 'diario') {
-          saidasDiarias.push({
-            descricao: item.descricao,
-            valor,
-            isExecutado: isExec,
-            isSimulado: true
-          });
+          saidasDiarias.push(pointItem);
         }
       });
 
       // 2. Process Daily Expenses for Day d
       const realRecordsForDay = gastosDiariosPorDia[d];
-      if (realRecordsForDay && realRecordsForDay.length > 0) {
+      const hasCustomOverride = customDailyExpenses[d] !== undefined;
+
+      if (hasCustomOverride) {
+        const customVal = customDailyExpenses[d];
+        if (customVal > 0) {
+          saidasDiarias.push({
+            descricao: realRecordsForDay && realRecordsForDay.length > 0 ? `Gastos diários (Simulado)` : `Gasto diário simulado`,
+            valor: customVal,
+            valorOriginal: realRecordsForDay ? realRecordsForDay.reduce((sum, r) => sum + r.valor, 0) : undefined,
+            isExecutado: Boolean(realRecordsForDay && realRecordsForDay.length > 0),
+            isSimulado: true,
+            isAjustado: Boolean(realRecordsForDay && realRecordsForDay.length > 0)
+          });
+        }
+      } else if (realRecordsForDay && realRecordsForDay.length > 0) {
         // Official executed daily expenses for this day
         realRecordsForDay.forEach(r => {
           saidasDiarias.push({
             descricao: r.descricao,
             valor: r.valor,
+            valorOriginal: r.valor,
             isExecutado: true,
-            isSimulado: false
+            isSimulado: false,
+            isAjustado: false
           });
         });
-      } else {
-        // If there's a custom daily override for this day, apply it
-        if (customDailyExpenses[d] !== undefined) {
-          const customVal = customDailyExpenses[d];
-          if (customVal > 0) {
-            saidasDiarias.push({
-              descricao: `Gasto diário simulado`,
-              valor: customVal,
-              isExecutado: false,
-              isSimulado: true
-            });
-          }
-        } else if (isFutureDay && limiteDiarioSimulado > 0) {
-          // Future projected day uses the simulated daily limit
-          saidasDiarias.push({
-            descricao: `Limite diário projetado`,
-            valor: limiteDiarioSimulado,
-            isExecutado: false,
-            isSimulado: true
-          });
-        }
+      } else if (isFutureDay && limiteDiarioSimulado > 0) {
+        // Future projected day uses the simulated daily limit
+        saidasDiarias.push({
+          descricao: `Limite diário projetado`,
+          valor: limiteDiarioSimulado,
+          isExecutado: false,
+          isSimulado: true,
+          isAjustado: false
+        });
       }
 
       // 3. Day sums
