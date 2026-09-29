@@ -63,19 +63,35 @@ export function Simulacoes() {
       setIsLoading(true);
       const data = await simulacoesService.loadBaseData(currentMonth);
 
-      // Aplica saldo inicial herdado de simulações de meses anteriores (se houver)
+      // O que é levado de um mês para o outro é APENAS o total resultante da conta nas simulações
       const simulatedOpening = simulacoesService.getSimulatedOpeningBalance(mesAno, data.saldoInicialConta);
       data.saldoInicialConta = simulatedOpening;
 
       setBaseData(data);
 
-      // Verifica se este mês já tem simulação salva em andamento
+      // Verifica se este mês específico já tem edições manuais feitas pelo usuário
       const existingSimulation = simulacoesService.getMonthSimulation(mesAno);
-      if (existingSimulation && existingSimulation.isModified) {
-        setSimulatedItems(existingSimulation.items.map(item => ({ ...item })));
-        setLimiteDiarioSimulado(existingSimulation.limiteDiarioSimulado);
-        setCustomDailyExpenses({ ...existingSimulation.customDailyExpenses });
+      if (existingSimulation && existingSimulation.hasUserEdits) {
+        // Aplica overrides específicos deste mês sobre os itens legítimos e oficiais deste mês
+        const itemsWithOverrides = data.items.map(item => {
+          const override = existingSimulation.itemOverrides?.[item.id];
+          if (override) {
+            return {
+              ...item,
+              valorSimulado: override.valorSimulado,
+              diaSimulado: override.diaSimulado,
+              ativo: override.ativo
+            };
+          }
+          return { ...item };
+        });
+
+        const customItems = existingSimulation.customItems ? existingSimulation.customItems.map(c => ({ ...c })) : [];
+        setSimulatedItems([...customItems, ...itemsWithOverrides]);
+        setLimiteDiarioSimulado(existingSimulation.limiteDiarioSimulado ?? data.limiteDiarioPadrao);
+        setCustomDailyExpenses(existingSimulation.customDailyExpenses ? { ...existingSimulation.customDailyExpenses } : {});
       } else {
+        // Mês novo ou sem edições manuais: sempre usa 100% os itens e status oficiais DESTE MÊS!
         setSimulatedItems(data.items.map(item => ({ ...item })));
         setLimiteDiarioSimulado(data.limiteDiarioPadrao);
         setCustomDailyExpenses({});
@@ -119,34 +135,52 @@ export function Simulacoes() {
     );
   }, [baseData, simulatedItems, limiteDiarioSimulado, customDailyExpenses]);
 
-  // Salva continuamente o estado da simulação do mês atual no store
+  // Salva continuamente o estado da simulação do mês atual no store (apenas overrides locais e saldo final)
   useEffect(() => {
-    if (!baseData || isLoading) return;
+    // PROTEÇÃO CRÍTICA CONTRA RACE CONDITION:
+    // Nunca salvar se baseData for de outro mês ou estiver carregando!
+    if (!baseData || isLoading || baseData.mesAno !== mesAno) return;
 
-    const hasItemChanges = simulatedItems.some(item => {
-      if (item.isCustom) return true;
+    const itemOverrides: { [id: string]: { valorSimulado: number; diaSimulado: number; ativo: boolean } } = {};
+    let hasItemOverrides = false;
+
+    simulatedItems.forEach(item => {
+      if (item.isCustom) return;
       const baseItem = baseData.items.find(b => b.id === item.id);
-      if (!baseItem) return true;
-      return (
+      if (!baseItem) return;
+
+      if (
         item.valorSimulado !== baseItem.valorOriginal ||
         item.diaSimulado !== baseItem.diaPrevistoOriginal ||
         item.ativo !== baseItem.ativo
-      );
-    }) || simulatedItems.length !== baseData.items.length;
+      ) {
+        hasItemOverrides = true;
+        itemOverrides[item.id] = {
+          valorSimulado: item.valorSimulado,
+          diaSimulado: item.diaSimulado,
+          ativo: item.ativo
+        };
+      }
+    });
 
+    const customItems = simulatedItems.filter(i => i.isCustom);
+    const hasCustomItems = customItems.length > 0;
     const hasDailyLimitChanges = limiteDiarioSimulado !== baseData.limiteDiarioPadrao;
     const hasCustomDaily = Object.keys(customDailyExpenses).length > 0;
-    const isModified = hasItemChanges || hasDailyLimitChanges || hasCustomDaily;
 
-    if (isModified || simSummary.saldoFinalSimulado !== simSummary.saldoFinalOficial) {
+    const hasUserEdits = hasItemOverrides || hasCustomItems || hasDailyLimitChanges || hasCustomDaily;
+    const hasSimulatedBalance = simSummary.saldoFinalSimulado !== simSummary.saldoFinalOficial;
+
+    if (hasUserEdits || hasSimulatedBalance) {
       simulacoesService.saveMonthSimulation(mesAno, {
         mesAno,
-        items: simulatedItems,
-        limiteDiarioSimulado,
-        customDailyExpenses,
-        isModified: true,
         saldoFinalSimulado: simSummary.saldoFinalSimulado,
-        saldoFinalOficial: simSummary.saldoFinalOficial
+        saldoFinalOficial: simSummary.saldoFinalOficial,
+        hasUserEdits,
+        itemOverrides: hasItemOverrides ? itemOverrides : undefined,
+        customItems: hasCustomItems ? customItems : undefined,
+        limiteDiarioSimulado: hasDailyLimitChanges ? limiteDiarioSimulado : undefined,
+        customDailyExpenses: hasCustomDaily ? customDailyExpenses : undefined
       });
     } else {
       simulacoesService.clearMonthSimulation(mesAno);

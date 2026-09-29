@@ -33,14 +33,21 @@ export interface SimulatedDayPoint {
   isToday: boolean;
 }
 
+export interface MonthItemOverride {
+  valorSimulado: number;
+  diaSimulado: number;
+  ativo: boolean;
+}
+
 export interface MonthSimulationState {
   mesAno: string;
-  items: SimulatedItem[];
-  limiteDiarioSimulado: number;
-  customDailyExpenses: { [dia: number]: number };
-  isModified: boolean;
   saldoFinalSimulado: number;
   saldoFinalOficial: number;
+  hasUserEdits: boolean;
+  itemOverrides?: { [itemId: string]: MonthItemOverride };
+  customItems?: SimulatedItem[];
+  limiteDiarioSimulado?: number;
+  customDailyExpenses?: { [dia: number]: number };
 }
 
 export interface SimulationBaseData {
@@ -134,7 +141,7 @@ const getSalarioForMonth = (dbSalarios: any[], mesAno: string) => {
   return null;
 };
 
-const SESSION_STORAGE_SIM_KEY = 'dinx_simulations_store_v1';
+const SESSION_STORAGE_SIM_KEY = 'dinx_simulations_store_v2';
 
 function loadStoredSimulations(): Record<string, MonthSimulationState> {
   try {
@@ -179,15 +186,16 @@ export const simulacoesService = {
   },
 
   getAllSimulatedMonths(): string[] {
-    return Object.keys(simulationsStore).filter(k => simulationsStore[k].isModified);
+    return Object.keys(simulationsStore).filter(k => simulationsStore[k].hasUserEdits);
   },
 
   hasActiveSimulations(): boolean {
-    return Object.values(simulationsStore).some(s => s.isModified);
+    return Object.values(simulationsStore).some(s => s.hasUserEdits);
   },
 
   /**
    * Calcula o saldo inicial da simulação de um mês com base nos meses anteriores simulados.
+   * O que é levado de um mês para o outro é APENAS o total resultante da simulação na linha do tempo.
    * Se o mês anterior direto (M-1) teve simulação com saldo final calculado, usa ele diretamente.
    * Se o usuário pulou meses, propaga o delta acumulado da simulação mais recente.
    */
@@ -195,13 +203,13 @@ export const simulacoesService = {
     const prevMesAno = getMesAnoAnterior(targetMesAno);
     const prevSim = simulationsStore[prevMesAno];
 
-    if (prevSim && prevSim.isModified && prevSim.saldoFinalSimulado !== undefined) {
+    if (prevSim && prevSim.saldoFinalSimulado !== undefined) {
       return Number(prevSim.saldoFinalSimulado.toFixed(2));
     }
 
     // Procura o mês simulado mais recente anterior a targetMesAno
     const simulatedMonths = Object.keys(simulationsStore)
-      .filter(m => m < targetMesAno && simulationsStore[m].isModified && simulationsStore[m].saldoFinalSimulado !== undefined)
+      .filter(m => m < targetMesAno && simulationsStore[m].saldoFinalSimulado !== undefined)
       .sort();
 
     if (simulatedMonths.length > 0) {
