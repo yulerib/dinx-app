@@ -224,7 +224,7 @@ export function Dashboard() {
         supabase.from('entradas').select('valor_previsto_base').eq('projetar', false).eq('ativo', true).lte('data_entrada', todayIso),
         supabase.from('registros_gastos_fixos').select('valor_real'),
         supabase.from('registros_diarios').select('valor_gasto'),
-        supabase.from('pagamentos_faturas').select('valor_pago').eq('pago', true),
+        supabase.from('pagamentos_faturas').select('*').eq('pago', true),
         supabase.from('movimentacoes_reserva').select('*'),
         supabase.from('registros_movimentacoes_reserva').select('*'),
         supabase.from('salario').select('*')
@@ -349,10 +349,29 @@ export function Dashboard() {
         (allPontualEntradasDb || []).reduce((acc, e) => acc + Number(e.valor_previsto_base), 0) +
         totalSalariosInflow;
 
+      // Faturas pagas no banco
+      let totalFaturasOutflow = 0;
+      (allFaturasDb || []).forEach((f: any) => {
+        let val = Number(f.valor_pago);
+        if (!val || val <= 0) {
+          val = parcelas
+            .filter(c => getParcelaCartaoInfo(c, f.mes_ano).ativa)
+            .reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+        }
+        totalFaturasOutflow += val;
+      });
+
+      // Se a fatura do mês anterior (a ser paga no mês corrente) ainda NÃO foi marcada como paga no DB,
+      // devemos contabilizá-la no saldo em conta para que a saída do cartão seja refletida:
+      const faturaPrevEstaPaga = (allFaturasDb || []).some((f: any) => f.mes_ano === pMesAno);
+      if (!faturaPrevEstaPaga && ccBillPreviousMonth > 0) {
+        totalFaturasOutflow += ccBillPreviousMonth;
+      }
+
       const totalOutflows = 
         (allGastosFixosDb || []).reduce((acc, r) => acc + Number(r.valor_real), 0) +
         (allGastosDiariosDb || []).reduce((acc, r) => acc + Number(r.valor_gasto), 0) +
-        (allFaturasDb || []).reduce((acc, r) => acc + Number(r.valor_pago), 0);
+        totalFaturasOutflow;
 
       setSaldoConta(totalInflows + totalReservaInflows - totalOutflows - totalReservaOutflows);
 
@@ -375,7 +394,10 @@ export function Dashboard() {
 
   // Cálculos consolidados para o mês selecionado
   // Outflows consolidate: Gastos Fixos + Gastos Diários + Fatura do Mês Anterior (que é paga neste mês)
-  const consolidatedOutflowThisMonth = fixosRealizado + diariosRealizado + ccBillPreviousMonth;
+  const valorFaturaMes = (faturaPrevStatus?.pago && Number(faturaPrevStatus.valor_pago) > 0)
+    ? Number(faturaPrevStatus.valor_pago)
+    : ccBillPreviousMonth;
+  const consolidatedOutflowThisMonth = fixosRealizado + diariosRealizado + valorFaturaMes;
   const netPerformanceThisMonth = totalInflowsThisMonth - consolidatedOutflowThisMonth;
 
   const globalPrevisto = fixosPrevisto + diariosPrevisto + parcelasPrevisto;

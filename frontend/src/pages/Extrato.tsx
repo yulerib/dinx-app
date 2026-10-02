@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
 import { Loader2, ArrowUpRight, Wallet, CreditCard, Calendar, PiggyBank, TrendingUp } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { supabase } from '../lib/supabase';
-import { getParcelaCartaoInfo } from '../services/parcelas';
+import { getParcelaCartaoInfo, parcelasService, getMesAnoAnteriorHelper } from '../services/parcelas';
 
 
 interface Movimento {
@@ -16,6 +18,12 @@ interface Movimento {
   valor: number;
   saldoPosMovimento?: number;
   createdAt: string;
+  faturaInfo?: {
+    mesAno: string;
+    label: string;
+    pago: boolean;
+    dataPagamento?: string;
+  };
 }
 
 export function Extrato() {
@@ -28,6 +36,18 @@ export function Extrato() {
   const [isLoading, setIsLoading] = useState(true);
   const [saldoInicial, setSaldoInicial] = useState(0);
   const [movimentos, setMovimentos] = useState<Movimento[]>([]);
+
+  // Modal para Pagar/Editar Fatura do Cartão no Extrato
+  const [isCCPaymentModalOpen, setIsCCPaymentModalOpen] = useState(false);
+  const [selectedFatura, setSelectedFatura] = useState<{
+    mesAno: string;
+    valor: number;
+    label: string;
+    pago: boolean;
+    dataPagamento?: string;
+  } | null>(null);
+  const [dataPagamentoCCInput, setDataPagamentoCCInput] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const formatBRL = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -382,36 +402,107 @@ export function Extrato() {
         }
       });
 
-      // D. Fatura Cartão de Crédito — pagas fisicamente neste mês
-      pagamentosFaturas.filter(f => f.pago).forEach(pagoFatura => {
-        const dataPago = pagoFatura.data_pagamento_real;
-        const physicalMonth = dataPago ? dataPago.substring(0, 7) : addMonths(pagoFatura.mes_ano, 1);
-
-        if (physicalMonth === mesAno) {
-          const diaPago = dataPago ? Number(dataPago.split('-')[2]) : (pagoFatura.dia_pagamento_real || 10);
-          const faturaVal = (pagoFatura.valor_pago && Number(pagoFatura.valor_pago) > 0)
-            ? Number(pagoFatura.valor_pago)
-            : comprasParceladas.filter(compra => {
-                return getParcelaCartaoInfo(compra, pagoFatura.mes_ano).ativa;
-              }).reduce((sum, p) => sum + Number(p.valor_parcela), 0);
-
-          if (faturaVal > 0) {
-            const [fy, fm] = pagoFatura.mes_ano.split('-').map(Number);
-            const mesesPt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-            const compLabel = `${mesesPt[fm - 1]}/${String(fy).slice(-2)}`;
-            listMovimentos.push({
-              id: `fatura-${pagoFatura.mes_ano}-pago`,
-              dia: diaPago,
-              descricao: `Fatura Cartão (${compLabel}) (Paga)`,
-              tipo: 'outflow',
-              origem: 'fatura',
-              status: 'pago',
-              valor: faturaVal,
-              createdAt: pagoFatura.created_at
-            });
-          }
-        }
+      // D. Fatura Cartão de Crédito — devida e/ou paga neste mês
+      const mesAnoAnterior = getMesAnoAnteriorHelper(mesAno);
+      const prevAtivas = comprasParceladas.filter(compra => {
+        return getParcelaCartaoInfo(compra, mesAnoAnterior).ativa;
       });
+      const valorFaturaCalculado = prevAtivas.reduce((sum, p) => sum + Number(p.valor_parcela), 0);
+
+      const faturaDb = pagamentosFaturas.find(f => f.mes_ano === mesAnoAnterior);
+      const [fy, fm] = mesAnoAnterior.split('-').map(Number);
+      const mesesPt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const compLabel = `${mesesPt[fm - 1]}/${String(fy).slice(-2)}`;
+
+      const faturaTemValor = valorFaturaCalculado > 0 || (faturaDb && Number(faturaDb.valor_pago) > 0);
+
+      if (faturaTemValor) {
+        if (faturaDb && faturaDb.pago) {
+          const diaPago = faturaDb.data_pagamento_real
+            ? Number(faturaDb.data_pagamento_real.split('-')[2])
+            : (faturaDb.dia_pagamento_real || 10);
+          const faturaVal = (faturaDb.valor_pago && Number(faturaDb.valor_pago) > 0)
+            ? Number(faturaDb.valor_pago)
+            : valorFaturaCalculado;
+
+          listMovimentos.push({
+            id: `fatura-${mesAnoAnterior}-pago`,
+            dia: diaPago,
+            descricao: `Fatura Cartão (${compLabel}) (Paga)`,
+            tipo: 'outflow',
+            origem: 'fatura',
+            status: 'pago',
+            valor: faturaVal,
+            createdAt: faturaDb.created_at || new Date().toISOString(),
+            faturaInfo: {
+              mesAno: mesAnoAnterior,
+              label: compLabel,
+              pago: true,
+              dataPagamento: faturaDb.data_pagamento_real
+            }
+          });
+        } else {
+          const today = new Date();
+          const isCurrentMonth = today.getFullYear() === year && today.getMonth() === currentMonth.getMonth();
+          const isPastMonth = currentMonth < new Date(today.getFullYear(), today.getMonth(), 1);
+          const isPastDay10 = (isCurrentMonth && today.getDate() > 10) || isPastMonth;
+
+          listMovimentos.push({
+            id: `fatura-${mesAnoAnterior}-pendente`,
+            dia: 10,
+            descricao: `Fatura Cartão (${compLabel}) (${isPastDay10 ? 'Atrasada' : 'Previsão'})`,
+            tipo: 'outflow',
+            origem: 'fatura',
+            status: isPastDay10 ? 'atrasado' : 'provisionado',
+            valor: valorFaturaCalculado,
+            createdAt: new Date().toISOString(),
+            faturaInfo: {
+              mesAno: mesAnoAnterior,
+              label: compLabel,
+              pago: false
+            }
+          });
+        }
+      }
+
+      // Outras faturas pagas excepcionalmente dentro deste mês (se houver pagamento fora da competência padrão)
+      pagamentosFaturas
+        .filter(f => f.pago && f.mes_ano !== mesAnoAnterior)
+        .forEach(extraFatura => {
+          let paidInThisMonth = false;
+          let diaPago = 10;
+          if (extraFatura.data_pagamento_real && extraFatura.data_pagamento_real.substring(0, 7) === mesAno) {
+            paidInThisMonth = true;
+            diaPago = Number(extraFatura.data_pagamento_real.split('-')[2]);
+          }
+
+          if (paidInThisMonth) {
+            const faturaVal = (extraFatura.valor_pago && Number(extraFatura.valor_pago) > 0)
+              ? Number(extraFatura.valor_pago)
+              : comprasParceladas.filter(c => getParcelaCartaoInfo(c, extraFatura.mes_ano).ativa).reduce((s, p) => s + Number(p.valor_parcela), 0);
+
+            if (faturaVal > 0) {
+              const [efy, efm] = extraFatura.mes_ano.split('-').map(Number);
+              const extraCompLabel = `${mesesPt[efm - 1]}/${String(efy).slice(-2)}`;
+              listMovimentos.push({
+                id: `fatura-${extraFatura.mes_ano}-pago-extra`,
+                dia: diaPago,
+                descricao: `Fatura Cartão (${extraCompLabel}) (Paga)`,
+                tipo: 'outflow',
+                origem: 'fatura',
+                status: 'pago',
+                valor: faturaVal,
+                createdAt: extraFatura.created_at || new Date().toISOString(),
+                faturaInfo: {
+                  mesAno: extraFatura.mes_ano,
+                  label: extraCompLabel,
+                  pago: true,
+                  dataPagamento: extraFatura.data_pagamento_real
+                }
+              });
+            }
+          }
+        });
 
       // E. Gastos Diários
       const catsComLimite = categoriasDiarias.filter(c => Number(c.limite_mensal) > 0);
@@ -553,6 +644,23 @@ export function Extrato() {
   const totalSaidas = movimentos.filter(m => m.tipo === 'outflow').reduce((acc, m) => acc + m.valor, 0);
   const saldoProjetadoFinal = saldoInicial + totalEntradas - totalSaidas;
 
+  const handleOpenFaturaModal = (mov: Movimento) => {
+    if (!mov.faturaInfo) return;
+    const today = new Date();
+    const todayDay = today.getDate();
+    const defaultDate = mov.faturaInfo.dataPagamento 
+      || `${mesAno}-${String(Math.min(todayDay, daysInMonth)).padStart(2, '0')}`;
+    setDataPagamentoCCInput(defaultDate);
+    setSelectedFatura({
+      mesAno: mov.faturaInfo.mesAno,
+      valor: mov.valor,
+      label: mov.faturaInfo.label,
+      pago: mov.faturaInfo.pago,
+      dataPagamento: mov.faturaInfo.dataPagamento
+    });
+    setIsCCPaymentModalOpen(true);
+  };
+
   return (
     <div className="theme-extrato" style={{ padding: '0.25rem 0' }}>
       <style>{`
@@ -611,6 +719,44 @@ export function Extrato() {
         .status-realizado, .status-pago { background-color: rgba(107, 163, 90, 0.12); color: #6BA35A; }
         .status-provisionado { background-color: rgba(107, 114, 128, 0.12); color: var(--text-muted); }
         .status-atrasado { background-color: rgba(232, 102, 89, 0.12); color: #e86659; }
+
+        .btn-fatura-action {
+          font-size: 0.68rem;
+          font-weight: 700;
+          padding: 0.15rem 0.45rem;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: 1px solid var(--border-color);
+          background-color: var(--bg-card);
+          color: var(--text-color);
+          text-transform: uppercase;
+        }
+        .btn-fatura-action:hover {
+          background-color: rgba(99, 102, 241, 0.1);
+          border-color: #6366f1;
+          color: #6366f1;
+        }
+        .btn-fatura-pay {
+          background-color: #6366f1;
+          border-color: #6366f1;
+          color: #ffffff;
+        }
+        .btn-fatura-pay:hover {
+          background-color: #4f46e5;
+          border-color: #4f46e5;
+          color: #ffffff;
+        }
+        .btn-fatura-atrasada {
+          background-color: #e86659;
+          border-color: #e86659;
+          color: #ffffff;
+        }
+        .btn-fatura-atrasada:hover {
+          background-color: #dc2626;
+          border-color: #dc2626;
+          color: #ffffff;
+        }
 
         @media (max-width: 992px) {
           .extrato-header-row { display: none !important; }
@@ -720,9 +866,32 @@ export function Extrato() {
 
                   {/* Status */}
                   <div data-label="Status">
-                    <span className={`status-badge status-${mov.status}`}>
-                      {mov.status}
-                    </span>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <span className={`status-badge status-${mov.status}`}>
+                        {mov.status}
+                      </span>
+                      {mov.origem === 'fatura' && mov.faturaInfo && (
+                        mov.status === 'pago' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFaturaModal(mov)}
+                            className="btn-fatura-action"
+                            title="Editar pagamento da fatura"
+                          >
+                            Editar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFaturaModal(mov)}
+                            className={`btn-fatura-action ${mov.status === 'atrasado' ? 'btn-fatura-atrasada' : 'btn-fatura-pay'}`}
+                            title="Registrar pagamento da fatura"
+                          >
+                            Pagar
+                          </button>
+                        )
+                      )}
+                    </div>
                   </div>
 
                   {/* Valor */}
@@ -740,6 +909,109 @@ export function Extrato() {
           </div>
         )}
       </Card>
+
+      {/* Modal de Pagamento de Fatura do Cartão no Extrato */}
+      <Modal 
+        isOpen={isCCPaymentModalOpen} 
+        onClose={() => {
+          setIsCCPaymentModalOpen(false);
+          setSelectedFatura(null);
+        }} 
+        title={selectedFatura?.pago ? "Editar Pagamento de Fatura" : "Confirmar Pagamento de Fatura"}
+      >
+        {selectedFatura && (
+          <div>
+            <p style={{ marginBottom: '1rem', lineHeight: '1.5' }}>
+              {selectedFatura.pago ? (
+                <>Fatura de <strong>{formatBRL(selectedFatura.valor)}</strong> referente a <strong>{selectedFatura.label}</strong>.</>
+              ) : (
+                <>Informe a data em que o pagamento da fatura de <strong>{formatBRL(selectedFatura.valor)}</strong> ({selectedFatura.label}) foi ou será efetuado:</>
+              )}
+            </p>
+            
+            <div className="input-group" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--text-muted)' }}>
+                Data do Pagamento
+              </label>
+              <input 
+                type="date" 
+                className="input" 
+                value={dataPagamentoCCInput} 
+                onChange={e => setDataPagamentoCCInput(e.target.value)}
+                required
+                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', gap: '0.75rem' }}>
+              {selectedFatura.pago ? (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={async () => {
+                    if (confirm('Deseja desmarcar o pagamento e reabrir esta fatura?')) {
+                      try {
+                        setIsSubmitting(true);
+                        await parcelasService.upsertPagamentoFatura(selectedFatura.mesAno, false, null, 0, null);
+                        await fetchData();
+                        setIsCCPaymentModalOpen(false);
+                        setSelectedFatura(null);
+                      } catch (err: any) {
+                        alert('Erro ao reabrir fatura: ' + err.message);
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }
+                  }}
+                  style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                >
+                  Reabrir Fatura
+                </Button>
+              ) : <div />}
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsCCPaymentModalOpen(false);
+                    setSelectedFatura(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={async () => {
+                    if (!dataPagamentoCCInput) return;
+                    try {
+                      setIsSubmitting(true);
+                      const diaReal = Number(dataPagamentoCCInput.split('-')[2]);
+                      await parcelasService.upsertPagamentoFatura(
+                        selectedFatura.mesAno, 
+                        true, 
+                        diaReal, 
+                        selectedFatura.valor, 
+                        dataPagamentoCCInput
+                      );
+                      await fetchData();
+                      setIsCCPaymentModalOpen(false);
+                      setSelectedFatura(null);
+                    } catch (error: any) {
+                      alert('Erro ao registrar pagamento: ' + error.message);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }} 
+                  disabled={isSubmitting || !dataPagamentoCCInput}
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" size={14} style={{ marginRight: '0.25rem' }} /> : null}
+                  {selectedFatura.pago ? 'Salvar Alteração' : 'Confirmar Pagamento'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
