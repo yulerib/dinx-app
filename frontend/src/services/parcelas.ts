@@ -219,7 +219,25 @@ export const parcelasService = {
     if (error) throw error;
   },
 
-  async deleteParcela(id: string): Promise<void> {
+  async deleteParcela(id: string, aPartirDeMesAno?: string): Promise<void> {
+    if (aPartirDeMesAno) {
+      const { data: compra } = await supabase
+        .from('compras_parceladas')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (compra && compra.recorrente && compra.mes_ano_inicio < aPartirDeMesAno) {
+        const mesFim = getMesAnoAnteriorHelper(aPartirDeMesAno);
+        const { error: errUpd } = await supabase
+          .from('compras_parceladas')
+          .update({ mes_ano_fim: mesFim })
+          .eq('id', id);
+        if (errUpd) throw errUpd;
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('compras_parceladas')
       .delete()

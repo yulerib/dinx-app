@@ -265,8 +265,13 @@ export function Horizonte() {
     if (!row) return null;
     const { rect } = tooltip;
     const top = rect.bottom + 6;
+    const bottomLimit = window.innerHeight - (window.innerWidth <= 768 ? 96 : 16);
     const left = Math.min(Math.max(8, rect.left + rect.width / 2 - 140), window.innerWidth - 288);
-    const style = { top: top + 220 > window.innerHeight ? undefined : top, bottom: top + 220 > window.innerHeight ? window.innerHeight - rect.top + 6 : undefined, left };
+    const style = {
+      top: top + 220 > bottomLimit ? undefined : top,
+      bottom: top + 220 > bottomLimit ? window.innerHeight - rect.top + 6 : undefined,
+      left
+    };
     const dataLabel = `${String(row.dia).padStart(2, '0')}/${mesAno.slice(5)} · ${row.diaSemana}`;
 
     if (tooltip.col === 'saldo') {

@@ -314,14 +314,26 @@ button[title="Adicionar / Ver"]:hover {
 .text-danger { color: var(--danger); }
 .text-warning { color: var(--warning); }
 
-/* Responsividade Mobile (Botões) */
+/* Responsividade Mobile (Layout e Botões) */
 @media (max-width: 768px) {
-  /* Apenas recolhe o texto se o botão de fato possuir um ícone via prop 'icon'
-     e não for configurado como bloco de largura total */
-  .btn:has(.btn-icon):not([style*="width: 100%"]):not([style*="width:100%"]) .btn-text {
+  .main-content {
+    padding: 1rem 1rem calc(5rem + env(safe-area-inset-bottom, 0px)) 1rem;
+  }
+
+  /* Botões apenas com ícone (ex: fechar modal) sempre circulares */
+  .btn:has(.btn-icon):not(:has(.btn-text)) {
+    padding: 0.5rem;
+    border-radius: 50%;
+    width: auto !important;
+    aspect-ratio: 1;
+  }
+
+  /* Apenas recolhe o texto em botões de cabeçalho/topo de página (fora de cards e modais)
+     e que não sejam blocos de largura total */
+  .btn:has(.btn-icon):not(.modal-card .btn):not(.card .btn):not([style*="width: 100%"]):not([style*="width:100%"]) .btn-text {
     display: none;
   }
-  .btn:has(.btn-icon):not([style*="width: 100%"]):not([style*="width:100%"]) {
+  .btn:has(.btn-icon):not(.modal-card .btn):not(.card .btn):not([style*="width: 100%"]):not([style*="width:100%"]) {
     padding: 0.625rem; /* Formato circular com ícone */
     border-radius: 50%;
     width: auto !important; /* Evita que estique */

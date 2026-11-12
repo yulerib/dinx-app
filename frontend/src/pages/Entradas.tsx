@@ -60,6 +60,12 @@ export function Entradas() {
   const [editTemFimDefinido, setEditTemFimDefinido] = useState(false);
   const [editAtivo, setEditAtivo] = useState(true);
 
+  // Receive Modal State (for recurring entries)
+  const [entradaToReceive, setEntradaToReceive] = useState<EntradaMensal | null>(null);
+  const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [receberValor, setReceberValor] = useState(0);
+  const [receberData, setReceberData] = useState('');
+
   const fetchEntradas = async () => {
     try {
       setIsLoading(true);
@@ -155,13 +161,25 @@ export function Entradas() {
 
     try {
       setIsSubmitting(true);
+      let finalMesAnoFim = editProjetar && editTemFimDefinido && editMesAnoFim ? editMesAnoFim : null;
+      let finalAtivo = editAtivo;
+
+      // Se o usuário desmarcou "Ativo" em uma entrada recorrente que já existia em meses anteriores,
+      // encerramos a partir deste mês para preservar o histórico dos meses passados
+      if (editProjetar && !editAtivo && editDataEntrada.substring(0, 7) < mesAno) {
+        const [y, m] = mesAno.split('-').map(Number);
+        const prevDate = new Date(y, m - 2, 1);
+        finalMesAnoFim = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+        finalAtivo = true;
+      }
+
       await entradasService.updateEntrada(entradaToEdit.id, {
         descricao: editDescricao,
         valor_previsto_base: editValor,
         data_entrada: editDataEntrada,
         projetar: editProjetar,
-        mes_ano_fim: editProjetar && editTemFimDefinido && editMesAnoFim ? editMesAnoFim : null,
-        ativo: editAtivo,
+        mes_ano_fim: finalMesAnoFim,
+        ativo: finalAtivo,
       });
       handleRefreshAll();
       setEntradaToEdit(null);
@@ -172,13 +190,85 @@ export function Entradas() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta entrada? Todos os registros dela nos meses também serão apagados.')) return;
+  const handleDelete = async (entrada: EntradaMensal) => {
+    const msg = entrada.projetar
+      ? 'Deseja encerrar/apagar esta entrada recorrente a partir deste mês? Os lançamentos e previsões dos meses anteriores permanecerão no histórico.'
+      : 'Tem certeza que deseja excluir esta entrada?';
+    if (!confirm(msg)) return;
     try {
-      await entradasService.deleteEntrada(id);
+      await entradasService.deleteEntrada(entrada.id, mesAno);
       handleRefreshAll();
     } catch (error: any) {
       alert('Falha ao excluir: ' + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  const handleOpenReceber = (entrada: EntradaMensal) => {
+    setEntradaToReceive(entrada);
+    const val = entrada.registro_atual ? Number(entrada.registro_atual.valor_real) : Number(entrada.valor_previsto_base);
+    setReceberValor(val > 0 ? val : Number(entrada.valor_previsto_base));
+
+    if (entrada.registro_atual?.data_recebimento_real) {
+      setReceberData(entrada.registro_atual.data_recebimento_real);
+    } else if (entrada.registro_atual?.dia_recebimento_real) {
+      setReceberData(`${mesAno}-${String(entrada.registro_atual.dia_recebimento_real).padStart(2, '0')}`);
+    } else {
+      const pDay = (entrada.data_entrada.split('-')[2] || '01').substring(0, 2);
+      setReceberData(`${mesAno}-${String(pDay).padStart(2, '0')}`);
+    }
+    setIsReceiveModalOpen(true);
+  };
+
+  const handleSaveReceber = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!entradaToReceive || receberValor <= 0 || !receberData) return;
+
+    try {
+      setIsSubmitting(true);
+      const selectedMonthIso = receberData.substring(0, 7);
+      if (selectedMonthIso !== mesAno) {
+        const mesesAbrev = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const mIdxAberto = Number(mesAno.split('-')[1]) - 1;
+        const mIdxSel = Number(selectedMonthIso.split('-')[1]) - 1;
+        const nomeMesAberto = mesesAbrev[mIdxAberto];
+        const nomeMesSel = mesesAbrev[mIdxSel];
+
+        const confirmacao = window.confirm(
+          `Atenção: Você está registrando o recebimento em um dia de outro mês (${nomeMesSel}).\nA contabilidade desta entrada será mantida no mês aberto (${nomeMesAberto}).\n\nDeseja prosseguir?`
+        );
+        if (!confirmacao) return;
+      }
+
+      const diaReal = Number(receberData.split('-')[2]);
+      await entradasService.upsertRegistroEntrada(
+        entradaToReceive.id,
+        mesAno,
+        receberValor,
+        diaReal,
+        receberData
+      );
+      handleRefreshAll();
+      setIsReceiveModalOpen(false);
+      setEntradaToReceive(null);
+    } catch (error: any) {
+      alert('Falha ao registrar recebimento: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearReceber = async () => {
+    if (!entradaToReceive) return;
+    try {
+      setIsSubmitting(true);
+      await entradasService.clearRecebimento(entradaToReceive.id, mesAno);
+      handleRefreshAll();
+      setIsReceiveModalOpen(false);
+      setEntradaToReceive(null);
+    } catch (error: any) {
+      alert('Falha ao estornar recebimento: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -203,6 +293,7 @@ export function Entradas() {
         salarioDesvioMes
       );
       await fetchSalario();
+      handleRefreshAll();
       setIsSalarioModalOpen(false);
     } catch (error: any) {
       alert('Falha ao salvar salário: ' + (error.message || JSON.stringify(error)));
@@ -213,7 +304,13 @@ export function Entradas() {
 
   const handleOpenReceberSalario = () => {
     setSalarioValorReal(salario?.valor_real || salario?.valor_previsto || 0);
-    setSalarioDataReal(salario?.data_real || `${mesAno}-01`);
+    if (salario?.data_real) {
+      setSalarioDataReal(salario.data_real);
+    } else {
+      const mesDep = salarioService.getMesDeposito(mesAno, salario?.desvio_mes_deposito ?? 0);
+      const diaPrev = String(salario?.dia_previsto || 5).padStart(2, '0');
+      setSalarioDataReal(`${mesDep}-${diaPrev}`);
+    }
     setIsReceberSalarioModalOpen(true);
   };
 
@@ -224,6 +321,7 @@ export function Entradas() {
       setIsSubmittingSalario(true);
       await salarioService.registrarRecebimento(mesAno, salarioValorReal, salarioDataReal);
       await fetchSalario();
+      handleRefreshAll();
       setIsReceberSalarioModalOpen(false);
     } catch (error: any) {
       alert('Falha ao registrar recebimento: ' + (error.message || JSON.stringify(error)));
@@ -237,6 +335,7 @@ export function Entradas() {
     try {
       await salarioService.estornarRecebimento(mesAno);
       await fetchSalario();
+      handleRefreshAll();
     } catch (error: any) {
       alert('Falha ao estornar: ' + (error.message || JSON.stringify(error)));
     }
@@ -611,10 +710,9 @@ export function Entradas() {
               <EntradaRow
                 key={entrada.id}
                 entrada={entrada}
-                mesAno={mesAno}
-                onUpdate={handleRefreshAll}
+                onReceber={() => handleOpenReceber(entrada)}
                 onEdit={() => handleOpenEdit(entrada)}
-                onDelete={() => handleDelete(entrada.id)}
+                onDelete={() => handleDelete(entrada)}
                 formatBRL={formatBRL}
               />
             ))}
@@ -847,6 +945,56 @@ export function Entradas() {
         )}
       </Modal>
 
+      {/* Modal Registrar Recebimento (Entradas Recorrentes) */}
+      <Modal isOpen={isReceiveModalOpen} onClose={() => setIsReceiveModalOpen(false)} title="Registrar Recebimento">
+        {entradaToReceive && (
+          <form onSubmit={handleSaveReceber}>
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: 'rgba(107, 163, 90, 0.06)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Entrada:</span>
+              <strong style={{ marginLeft: '0.5rem', color: 'var(--text-main)' }}>{entradaToReceive.descricao}</strong>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Valor Projetado: <strong>{formatBRL(entradaToReceive.valor_previsto_base)}</strong>
+              </div>
+            </div>
+
+            <CurrencyInput
+              label="Valor Efetivamente Recebido"
+              value={receberValor}
+              onChange={setReceberValor}
+              required
+            />
+
+            <div className="input-group" style={{ marginTop: '1rem' }}>
+              <label>Data Real do Recebimento</label>
+              <input
+                type="date"
+                className="input"
+                value={receberData}
+                onChange={e => setReceberData(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '1rem' }}>
+              {entradaToReceive.registro_atual && Number(entradaToReceive.registro_atual.valor_real) > 0 ? (
+                <Button type="button" variant="outline" onClick={handleClearReceber} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }} disabled={isSubmitting}>
+                  Estornar Recebimento
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button type="button" variant="outline" onClick={() => setIsReceiveModalOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmitting} style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
+                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       {/* Modal Configurar Salário */}
       <Modal isOpen={isSalarioModalOpen} onClose={() => setIsSalarioModalOpen(false)} title={`Salário — ${mesAno.split('-').reverse().join('/')}`}>
         <form onSubmit={handleSaveSalarioPrevisto}>
@@ -943,48 +1091,22 @@ export function Entradas() {
   );
 }
 
-// Separate component for rows to manage state, debouncing, and inline CurrencyInput elegantly
+// Separate component for rows that triggers the Registrar Recebimento modal for recurring entries
 function EntradaRow({
   entrada,
-  mesAno,
-  onUpdate,
+  onReceber,
   onEdit,
   onDelete,
   formatBRL
 }: {
   entrada: EntradaMensal;
-  mesAno: string;
-  onUpdate: () => void;
+  onReceber: () => void;
   onEdit: () => void;
   onDelete: () => void;
   formatBRL: (val: number) => string;
 }) {
-  const dbValorReal = entrada.registro_atual?.valor_real ?? 0;
-  const [localValorReal, setLocalValorReal] = useState(dbValorReal);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isEditingValue, setIsEditingValue] = useState(false);
-
-  useEffect(() => {
-    setLocalValorReal(dbValorReal);
-  }, [dbValorReal]);
-
-  useEffect(() => {
-    if (localValorReal === dbValorReal) return;
-
-    const timer = setTimeout(async () => {
-      try {
-        setIsSaving(true);
-        await entradasService.upsertRegistroEntrada(entrada.id, mesAno, localValorReal);
-        onUpdate();
-      } catch (error) {
-        console.error('Erro ao atualizar valor real:', error);
-      } finally {
-        setIsSaving(false);
-      }
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, [localValorReal, dbValorReal, entrada.id, mesAno, onUpdate]);
+  const realRecebido = Number(entrada.registro_atual?.valor_real ?? 0);
+  const isReceived = entrada.projetar ? realRecebido > 0 : true;
 
   const toSentenceCase = (str: string) => {
     if (!str) return '';
@@ -992,28 +1114,36 @@ function EntradaRow({
     return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
   };
 
-  const isReceived = localValorReal > 0;
-
   const dataParte = entrada.data_entrada.split('-');
-  const diaEntrada = dataParte[2];
+  const diaPrevisto = Number(dataParte[2]) || dataParte[2];
 
-  const legenda = entrada.projetar
-    ? `Recorrente • Dia ${diaEntrada}`
-    : `Pontual • ${diaEntrada}/${dataParte[1]}/${dataParte[0]}`;
-
-  const legendaCompleta = entrada.projetar && entrada.mes_ano_fim
-    ? `${legenda} (Até ${entrada.mes_ano_fim.split('-').reverse().join('/')})`
-    : legenda;
+  const getLegenda = () => {
+    if (!entrada.projetar) {
+      return `Pontual • ${dataParte[2]}/${dataParte[1]}/${dataParte[0]}`;
+    }
+    let texto = `Dia previsto: ${diaPrevisto}`;
+    if (entrada.mes_ano_fim) {
+      texto += ` (Até ${entrada.mes_ano_fim.split('-').reverse().join('/')})`;
+    }
+    if (isReceived && entrada.registro_atual) {
+      if (entrada.registro_atual.data_recebimento_real) {
+        texto += ` • Recebido em: ${entrada.registro_atual.data_recebimento_real.split('-').reverse().join('/')}`;
+      } else if (entrada.registro_atual.dia_recebimento_real) {
+        texto += ` • Recebido no dia: ${entrada.registro_atual.dia_recebimento_real}`;
+      }
+    }
+    return texto;
+  };
 
   return (
     <TransactionListItem
       type="fixed"
-      className={isReceived ? 'gasto-row-ja-paga' : 'gasto-row-aberta'}
+      className={entrada.projetar && isReceived ? 'gasto-row-ja-paga' : 'gasto-row-aberta'}
       title={
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 600 }}>{toSentenceCase(entrada.descricao)}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-            {legendaCompleta}
+            {getLegenda()}
           </span>
         </div>
       }
@@ -1026,30 +1156,10 @@ function EntradaRow({
       }
       value2={
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'flex-end' }}>
-          {isSaving && <Loader2 className="animate-spin text-muted" size={14} />}
-
           {entrada.projetar ? (
-            isEditingValue ? (
-              <CurrencyInput
-                value={localValorReal}
-                onChange={setLocalValorReal}
-                placeholder="R$ 0,00"
-                autoFocus
-                onBlur={() => setIsEditingValue(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') setIsEditingValue(false);
-                }}
-                style={{
-                  width: '120px',
-                  padding: '0.35rem 0.5rem',
-                  fontSize: '0.875rem',
-                  marginBottom: 0,
-                  textAlign: 'right'
-                }}
-              />
-            ) : isReceived ? (
+            isReceived ? (
               <div
-                onClick={() => setIsEditingValue(true)}
+                onClick={onReceber}
                 style={{
                   cursor: 'pointer',
                   padding: '0.4rem 0.5rem',
@@ -1061,14 +1171,11 @@ function EntradaRow({
                 }}
                 title="Clique para alterar o recebimento"
               >
-                {formatBRL(localValorReal)}
+                {formatBRL(realRecebido)}
               </div>
             ) : (
               <button
-                onClick={() => {
-                  setLocalValorReal(entrada.valor_previsto_base);
-                  setIsEditingValue(true);
-                }}
+                onClick={onReceber}
                 style={{
                   padding: '0.35rem 0.65rem',
                   backgroundColor: 'rgba(107, 163, 90, 0.15)',

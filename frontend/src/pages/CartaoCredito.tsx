@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { ProgressBar } from '../components/ui/ProgressBar';
-import { Plus, Check, Loader2, Edit2, Trash2, Settings, Repeat, Ban, RotateCcw, CreditCard } from 'lucide-react';
+import { Plus, Check, Loader2, Edit2, Trash2, Settings, Repeat, Ban, CreditCard } from 'lucide-react';
 import { useMonth } from '../contexts/MonthContext';
 import { parcelasService, getParcelaCartaoInfo, getMesAnoAnteriorHelper } from '../services/parcelas';
 import { chartsService } from '../services/charts';
@@ -143,12 +143,6 @@ export function CartaoCredito() {
     return getParcelaCartaoInfo(compra, mesAnoAnterior).ativa;
   });
   const valorFaturaAnterior = parcelasAnterior.reduce((acc, p) => acc + p.valor_parcela, 0);
-
-  // Assinaturas Canceladas em/antes deste mês
-  const assinaturasCanceladas = todasParcelas.filter(compra => {
-    if (!compra.recorrente) return false;
-    return compra.mes_ano_inicio <= mesAno && compra.mes_ano_fim && compra.mes_ano_fim < mesAno;
-  });
 
   const isAtrasada = () => {
     if (pagamentoFaturaAnterior?.pago) return false;
@@ -304,21 +298,13 @@ export function CartaoCredito() {
     }
   };
 
-  const handleReativarAssinatura = async (compra: CompraParcelada) => {
-    if (!confirm(`Deseja reativar a assinatura "${compra.nome_compra}"? Ela voltará a ser cobrada mensalmente nas faturas.`)) return;
-
+  const handleDeleteCompra = async (compra: CompraParcelada) => {
+    const msg = compra.recorrente
+      ? `Deseja encerrar/apagar a compra recorrente "${compra.nome_compra}" a partir de ${formatMesAnoAbreviado(mesAno)}?\n\nEla deixará de ser cobrada deste mês em diante, mantendo o histórico dos meses anteriores.`
+      : 'Excluir este item? Todo o histórico dele desaparecerá de todos os meses.';
+    if (!confirm(msg)) return;
     try {
-      await parcelasService.reativarAssinatura(compra.id);
-      await fetchData();
-    } catch (error: any) {
-      alert('Erro ao reativar assinatura: ' + (error.message || JSON.stringify(error)));
-    }
-  };
-
-  const handleDeleteCompra = async (id: string) => {
-    if (!confirm('Excluir este item? Todo o histórico dele desaparecerá de todos os meses.')) return;
-    try {
-      await parcelasService.deleteParcela(id);
+      await parcelasService.deleteParcela(compra.id, mesAno);
       await fetchData();
     } catch (error: any) {
       alert('Erro ao excluir: ' + (error.message || JSON.stringify(error)));
@@ -446,16 +432,34 @@ export function CartaoCredito() {
           {valorFaturaAnterior > 0 && (
             <div>
               {pagamentoFaturaAnterior?.pago ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <span
+                    onClick={() => {
+                      const prefill = pagamentoFaturaAnterior.data_pagamento_real
+                        || `${mesAno}-${String(pagamentoFaturaAnterior.dia_pagamento_real || 10).padStart(2, '0')}`;
+                      setDataPagamentoRealInput(prefill);
+                      setIsCCPaymentModalOpen(true);
+                    }}
+                    style={{ fontSize: '0.875rem', color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed' }}
+                    title="Clique para alterar a data do pagamento"
+                  >
                     {pagamentoFaturaAnterior.data_pagamento_real ? (
                       <>Paga em: <strong>{pagamentoFaturaAnterior.data_pagamento_real.split('-').reverse().join('/')}</strong></>
                     ) : (
                       <>Paga no dia <strong>{pagamentoFaturaAnterior.dia_pagamento_real}</strong></>
                     )}
                   </span>
-                  <Button variant="outline" onClick={handleReabrirFatura} disabled={isPayingFatura}>
-                    Reabrir Fatura
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const prefill = pagamentoFaturaAnterior.data_pagamento_real
+                        || `${mesAno}-${String(pagamentoFaturaAnterior.dia_pagamento_real || 10).padStart(2, '0')}`;
+                      setDataPagamentoRealInput(prefill);
+                      setIsCCPaymentModalOpen(true);
+                    }}
+                    disabled={isPayingFatura}
+                  >
+                    Editar Pagamento
                   </Button>
                 </div>
               ) : (
@@ -707,11 +711,11 @@ export function CartaoCredito() {
                       <Edit2 size={16} />
                     </button>
                     <button 
-                      onClick={() => handleDeleteCompra(compra.id)} 
+                      onClick={() => handleDeleteCompra(compra)} 
                       style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
                       onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
                       onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                      title="Excluir Definitivamente"
+                      title={compra.is_recorrente ? `Encerrar a partir de ${formatMesAnoAbreviado(mesAno)}` : "Excluir Definitivamente"}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -719,51 +723,6 @@ export function CartaoCredito() {
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Seção de Assinaturas Canceladas / Inativas para o mês selecionado */}
-        {assinaturasCanceladas.length > 0 && (
-          <div className="cancelled-subs-section">
-            <h4 style={{ fontSize: '0.825rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.05em', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Ban size={14} style={{ color: 'var(--text-muted)' }} /> Assinaturas Canceladas ({assinaturasCanceladas.length})
-            </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {assinaturasCanceladas.map(sub => {
-                const mesCancelamento = (() => {
-                  const [y, m] = (sub.mes_ano_fim || '').split('-').map(Number);
-                  const d = new Date(y, m, 1);
-                  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                })();
-
-                return (
-                  <div key={sub.id} className="cancelled-sub-item">
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                        {sub.nome_compra}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {formatBRL(sub.valor_parcela)}/mês • Cancelada a partir de {formatMesAnoAbreviado(mesCancelamento)}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <Button variant="outline" onClick={() => handleReativarAssinatura(sub)} icon={<RotateCcw size={14} />}>
-                        Reativar
-                      </Button>
-                      <button 
-                        onClick={() => handleDeleteCompra(sub.id)} 
-                        style={{ padding: '0.25rem', color: 'var(--text-muted)', transition: 'color 0.2s', background: 'none', border: 'none', cursor: 'pointer' }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--danger)'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                        title="Excluir Definitivamente"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
       </Card>
@@ -993,7 +952,7 @@ export function CartaoCredito() {
       </Modal>
 
       {/* Modal de Pagamento de Fatura do Cartão */}
-      <Modal isOpen={isCCPaymentModalOpen} onClose={() => setIsCCPaymentModalOpen(false)} title="Confirmar Pagamento de Fatura">
+      <Modal isOpen={isCCPaymentModalOpen} onClose={() => setIsCCPaymentModalOpen(false)} title={pagamentoFaturaAnterior?.pago ? "Editar Pagamento de Fatura" : "Confirmar Pagamento de Fatura"}>
         <div>
           <p style={{ marginBottom: '1rem', lineHeight: '1.5' }}>
             Informe a data em que o pagamento da fatura de <strong>{formatBRL(valorFaturaAnterior)}</strong> ({formatMesAnoAbreviado(mesAnoAnterior)}) foi ou será efetuado:
@@ -1010,35 +969,52 @@ export function CartaoCredito() {
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
-            <Button type="button" variant="outline" onClick={() => setIsCCPaymentModalOpen(false)}>Cancelar</Button>
-            <Button onClick={async () => {
-              if (!dataPagamentoRealInput) return;
-              try {
-                setIsPayingFatura(true);
-                const diaReal = Number(dataPagamentoRealInput.split('-')[2]);
-                await parcelasService.upsertPagamentoFatura(
-                  mesAnoAnterior,
-                  true,
-                  diaReal,
-                  valorFaturaAnterior,
-                  dataPagamentoRealInput
-                );
-                const pag = await parcelasService.fetchPagamentoFatura(mesAnoAnterior);
-                setPagamentoFaturaAnterior(pag);
-                const cData = await chartsService.getDashboardChartsData(currentMonth);
-                setChartData(cData);
-                setIsCCPaymentModalOpen(false);
-                alert('Pagamento registrado com sucesso!');
-              } catch (error: any) {
-                alert('Erro ao pagar fatura: ' + (error.message || JSON.stringify(error)));
-              } finally {
-                setIsPayingFatura(false);
-              }
-            }} disabled={isPayingFatura || !dataPagamentoRealInput}>
-              {isPayingFatura ? <Loader2 className="animate-spin" size={14} style={{ marginRight: '0.25rem' }} /> : null}
-              Confirmar Pagamento
-            </Button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '1rem' }}>
+            {pagamentoFaturaAnterior?.pago ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  await handleReabrirFatura();
+                  setIsCCPaymentModalOpen(false);
+                }}
+                style={{ borderColor: 'var(--danger, #ef4444)', color: 'var(--danger, #ef4444)' }}
+                disabled={isPayingFatura}
+              >
+                Reabrir Fatura
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <Button type="button" variant="outline" onClick={() => setIsCCPaymentModalOpen(false)}>Cancelar</Button>
+              <Button onClick={async () => {
+                if (!dataPagamentoRealInput) return;
+                try {
+                  setIsPayingFatura(true);
+                  const diaReal = Number(dataPagamentoRealInput.split('-')[2]);
+                  await parcelasService.upsertPagamentoFatura(
+                    mesAnoAnterior,
+                    true,
+                    diaReal,
+                    valorFaturaAnterior,
+                    dataPagamentoRealInput
+                  );
+                  const pag = await parcelasService.fetchPagamentoFatura(mesAnoAnterior);
+                  setPagamentoFaturaAnterior(pag);
+                  const cData = await chartsService.getDashboardChartsData(currentMonth);
+                  setChartData(cData);
+                  setIsCCPaymentModalOpen(false);
+                } catch (error: any) {
+                  alert('Erro ao pagar fatura: ' + (error.message || JSON.stringify(error)));
+                } finally {
+                  setIsPayingFatura(false);
+                }
+              }} disabled={isPayingFatura || !dataPagamentoRealInput}>
+                {isPayingFatura ? <Loader2 className="animate-spin" size={14} style={{ marginRight: '0.25rem' }} /> : <Check size={16} />}
+                {pagamentoFaturaAnterior?.pago ? 'Salvar' : 'Confirmar Pagamento'}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

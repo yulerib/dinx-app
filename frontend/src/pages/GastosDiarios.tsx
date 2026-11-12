@@ -15,7 +15,7 @@ import type { CategoriaComRegistroDiario, RegistroDiario } from '../types/databa
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 
 export function GastosDiarios() {
-  const { currentMonth, selectedDay, nextDay, prevDay, goToToday } = useMonth();
+  const { currentMonth, selectedDay, setSelectedDay, setMonth, nextDay, prevDay, goToToday } = useMonth();
   const year = currentMonth.getFullYear();
   const month = String(currentMonth.getMonth() + 1).padStart(2, '0');
   const mesAno = `${year}-${month}`;
@@ -23,6 +23,7 @@ export function GastosDiarios() {
   const daysInMonth = new Date(year, currentMonth.getMonth() + 1, 0).getDate();
 
   const dataIso = `${mesAno}-${String(selectedDay).padStart(2, '0')}`;
+  const dayPickerRef = React.useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'lancamentos' | 'extrato' | 'resumo' | 'graficos'>('lancamentos');
 
@@ -49,6 +50,8 @@ export function GastosDiarios() {
   const [registroToEdit, setRegistroToEdit] = useState<RegistroDiario | null>(null);
   const [descLancamento, setDescLancamento] = useState('');
   const [valorLancamento, setValorLancamento] = useState(0);
+  const [novoGastoData, setNovoGastoData] = useState(dataIso);
+  const [pontualData, setPontualData] = useState(dataIso);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -282,6 +285,7 @@ export function GastosDiarios() {
     setRegistroToEdit(null);
     setDescLancamento('');
     setValorLancamento(0);
+    setNovoGastoData(dataIso);
     setIsLancamentoModalOpen(true);
   };
 
@@ -289,25 +293,34 @@ export function GastosDiarios() {
     setRegistroToEdit(r);
     setDescLancamento(r.descricao || '');
     setValorLancamento(r.valor_gasto);
+    setNovoGastoData(r.data || dataIso);
   };
 
   const handleSaveLancamento = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeCategoria || !descLancamento || valorLancamento < 0) return;
+    if (!activeCategoria || !descLancamento || valorLancamento < 0 || !novoGastoData) return;
     try {
       setIsSubmitting(true);
       if (registroToEdit) {
-        await gastosDiariosService.updateRegistroDiario(registroToEdit.id_registro, valorLancamento, descLancamento);
+        await gastosDiariosService.updateRegistroDiario(registroToEdit.id_registro, valorLancamento, descLancamento, novoGastoData);
       } else {
-        await gastosDiariosService.addRegistroDiario(activeCategoria.id, dataIso, valorLancamento, descLancamento);
+        await gastosDiariosService.addRegistroDiario(activeCategoria.id, novoGastoData, valorLancamento, descLancamento);
       }
       
+      const targetMonth = novoGastoData.substring(0, 7);
+      const targetDay = Number(novoGastoData.split('-')[2]);
+      if (targetMonth === mesAno && targetDay !== selectedDay) {
+        setSelectedDay(targetDay);
+      }
+
       await fetchData();
       setRegistroToEdit(null);
       setDescLancamento('');
       setValorLancamento(0);
+      setNovoGastoData(targetMonth === mesAno ? novoGastoData : dataIso);
       
-      const newCats = await gastosDiariosService.fetchCategoriasComRegistroDia(dataIso);
+      const queryDataIso = targetMonth === mesAno ? novoGastoData : dataIso;
+      const newCats = await gastosDiariosService.fetchCategoriasComRegistroDia(queryDataIso);
       const updatedCat = newCats.find(c => c.id === activeCategoria.id);
       if (updatedCat) setActiveCategoria(updatedCat);
 
@@ -336,6 +349,7 @@ export function GastosDiarios() {
     setRegistroToEdit(null);
     setDescLancamento('');
     setValorLancamento(0);
+    setPontualData(dataIso);
     setIsPontualModalOpen(true);
   };
 
@@ -343,19 +357,27 @@ export function GastosDiarios() {
     setRegistroToEdit(r);
     setDescLancamento(r.descricao || '');
     setValorLancamento(r.valor_gasto);
+    setPontualData(r.data || dataIso);
     setIsPontualModalOpen(true);
   };
 
   const handleSavePontual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!descLancamento || valorLancamento < 0) return;
+    if (!descLancamento || valorLancamento < 0 || !pontualData) return;
     try {
       setIsSubmitting(true);
       if (registroToEdit) {
-        await gastosDiariosService.updateRegistroDiario(registroToEdit.id_registro, valorLancamento, descLancamento);
+        await gastosDiariosService.updateRegistroDiario(registroToEdit.id_registro, valorLancamento, descLancamento, pontualData);
       } else {
-        await gastosDiariosService.addRegistroDiario(null, dataIso, valorLancamento, descLancamento);
+        await gastosDiariosService.addRegistroDiario(null, pontualData, valorLancamento, descLancamento);
       }
+
+      const targetMonth = pontualData.substring(0, 7);
+      const targetDay = Number(pontualData.split('-')[2]);
+      if (targetMonth === mesAno && targetDay !== selectedDay) {
+        setSelectedDay(targetDay);
+      }
+
       await fetchData();
       setIsPontualModalOpen(false);
       setRegistroToEdit(null);
@@ -539,19 +561,75 @@ export function GastosDiarios() {
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '0.75rem', 
+                gap: '0.5rem', 
                 backgroundColor: 'var(--color-main)', 
                 padding: '0.35rem 0.85rem', 
                 borderRadius: '50px', 
                 border: '2px solid #141816', 
                 boxShadow: 'var(--shadow-sm)',
                 color: '#141816',
-                height: '40px'
+                height: '40px',
+                position: 'relative'
               }}
             >
-              <button onClick={prevDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-              <span style={{ fontWeight: 700, minWidth: '55px', textAlign: 'center', color: '#141816', fontSize: '0.9rem', userSelect: 'none' }}>Dia {String(selectedDay).padStart(2, '0')}</span>
-              <button onClick={nextDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+              <button onClick={prevDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }} title="Dia anterior"><ChevronLeft size={18} /></button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (dayPickerRef.current) {
+                    if (typeof dayPickerRef.current.showPicker === 'function') {
+                      dayPickerRef.current.showPicker();
+                    } else {
+                      dayPickerRef.current.click();
+                    }
+                  }
+                }}
+                style={{
+                  fontWeight: 700,
+                  minWidth: '75px',
+                  textAlign: 'center',
+                  color: '#141816',
+                  fontSize: '0.9rem',
+                  userSelect: 'none',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.35rem',
+                  padding: '0.15rem 0.25rem'
+                }}
+                title="Selecionar dia no calendário"
+              >
+                <Calendar size={14} />
+                <span>Dia {String(selectedDay).padStart(2, '0')}</span>
+              </button>
+              <input
+                ref={dayPickerRef}
+                type="date"
+                value={dataIso}
+                min={`${mesAno}-01`}
+                max={`${mesAno}-${String(daysInMonth).padStart(2, '0')}`}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const [y, m, d] = e.target.value.split('-').map(Number);
+                    if (y !== year || m !== currentMonth.getMonth() + 1) {
+                      setMonth(new Date(y, m - 1, 1));
+                    }
+                    setSelectedDay(d);
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  opacity: 0,
+                  width: 0,
+                  height: 0,
+                  pointerEvents: 'none'
+                }}
+                tabIndex={-1}
+              />
+              <button onClick={nextDay} style={{ padding: '0.25rem', color: '#141816', display: 'flex', background: 'none', border: 'none', cursor: 'pointer' }} title="Próximo dia"><ChevronRight size={18} /></button>
             </div>
           </div>
         </div>
@@ -1210,7 +1288,7 @@ export function GastosDiarios() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             
             <div>
-              <h4 className="text-h4" style={{ marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Registrados hoje:</h4>
+              <h4 className="text-h4" style={{ marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Registrados hoje ({dataIso.split('-').reverse().join('/')}):</h4>
               {activeCategoria.registros_hoje.length === 0 ? (
                 <p style={{ fontSize: '0.875rem' }}>Nenhum lançamento.</p>
               ) : (
@@ -1244,10 +1322,20 @@ export function GastosDiarios() {
                 <input type="text" className="input" placeholder="Ex: Almoço" value={descLancamento} onChange={e => setDescLancamento(e.target.value)} required />
               </div>
               <CurrencyInput label="Valor" value={valorLancamento} onChange={setValorLancamento} required />
+              <div className="input-group" style={{ marginTop: '1rem' }}>
+                <label>Data do Gasto</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={novoGastoData}
+                  onChange={e => setNovoGastoData(e.target.value)}
+                  required
+                />
+              </div>
               
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem', gap: '0.5rem' }}>
                 {registroToEdit && (
-                  <Button type="button" variant="outline" onClick={() => { setRegistroToEdit(null); setDescLancamento(''); setValorLancamento(0); }}>
+                  <Button type="button" variant="outline" onClick={() => { setRegistroToEdit(null); setDescLancamento(''); setValorLancamento(0); setNovoGastoData(dataIso); }}>
                     Cancelar Edição
                   </Button>
                 )}
@@ -1276,6 +1364,16 @@ export function GastosDiarios() {
             />
           </div>
           <CurrencyInput label="Valor" value={valorLancamento} onChange={setValorLancamento} required />
+          <div className="input-group" style={{ marginTop: '1rem' }}>
+            <label>Data do Gasto</label>
+            <input
+              type="date"
+              className="input"
+              value={pontualData}
+              onChange={e => setPontualData(e.target.value)}
+              required
+            />
+          </div>
           
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem', gap: '1rem' }}>
             <Button type="button" variant="outline" onClick={() => { setIsPontualModalOpen(false); setRegistroToEdit(null); }}>Cancelar</Button>

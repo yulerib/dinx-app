@@ -456,6 +456,8 @@
 
   .sim-fab {
     display: flex;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    z-index: 850;
   }
 
   .sim-metric-value {

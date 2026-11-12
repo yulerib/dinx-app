@@ -207,8 +207,10 @@ export function Dashboard() {
 
       // 5. Buscar todos os históricos para Saldo Cumulativo da Conta
       const [
+        { data: allEntradasRecorrentesDb },
         { data: allRegEntradasDb },
         { data: allPontualEntradasDb },
+        { data: allGastosFixosParentsDb },
         { data: allGastosFixosDb },
         { data: allGastosDiariosDb },
         { data: allFaturasDb },
@@ -216,19 +218,24 @@ export function Dashboard() {
         { data: allRegsReservaDb },
         { data: allSalariosDb }
       ] = await Promise.all([
-        // Registros de entradas recorrentes (projetadas) — valor_real é o recebido de fato
-        supabase.from('registros_entradas').select('valor_real').in('id_entrada',
-          await supabase.from('entradas').select('id').eq('projetar', true).then(r => (r.data || []).map((e: any) => e.id))
-        ),
+        supabase.from('entradas').select('id, mes_ano_fim').eq('projetar', true),
+        supabase.from('registros_entradas').select('id_entrada, mes_ano, valor_real'),
         // Entradas pontuais (únicas) — valor_previsto_base é sempre o valor recebido
         supabase.from('entradas').select('valor_previsto_base').eq('projetar', false).eq('ativo', true).lte('data_entrada', todayIso),
-        supabase.from('registros_gastos_fixos').select('valor_real'),
+        supabase.from('gastos_fixos').select('id, mes_ano_fim'),
+        supabase.from('registros_gastos_fixos').select('id_gasto_fixo, mes_ano, valor_real'),
         supabase.from('registros_diarios').select('valor_gasto'),
         supabase.from('pagamentos_faturas').select('*').eq('pago', true),
         supabase.from('movimentacoes_reserva').select('*'),
         supabase.from('registros_movimentacoes_reserva').select('*'),
         supabase.from('salario').select('*')
       ]);
+
+      const entradasRecorrentesMap = new Map<string, string | null>();
+      (allEntradasRecorrentesDb || []).forEach((e: any) => entradasRecorrentesMap.set(e.id, e.mes_ano_fim ?? null));
+
+      const gastosFixosMap = new Map<string, string | null>();
+      (allGastosFixosParentsDb || []).forEach((f: any) => gastosFixosMap.set(f.id, f.mes_ano_fim ?? null));
 
       const allMovsReserva = allMovsReservaDb || [];
       const allRegsReserva = allRegsReservaDb || [];
@@ -252,7 +259,7 @@ export function Dashboard() {
 
       allRegsReserva.forEach((r: any) => {
         const parent = allMovsReserva.find((m: any) => m.id === r.id_movimentacao);
-        if (parent) {
+        if (parent && (!parent.mes_ano_fim || r.mes_ano <= parent.mes_ano_fim)) {
           const dia = r.dia_movimentacao_real || parent.dia_movimentacao_previsto;
           const dataMov = `${r.mes_ano}-${String(dia).padStart(2, '0')}`;
           histReserva.push({
@@ -342,10 +349,15 @@ export function Dashboard() {
         }
       });
 
-      // Entradas recorrentes: soma o valor_real de cada registro (o que de fato entrou no mês)
+      // Entradas recorrentes: soma o valor_real de cada registro válido (dentro da vigência mes_ano_fim)
       // Entradas pontuais: sempre usa valor_previsto_base (registro não sobrescreve o valor único)
+      const validRegEntradas = (allRegEntradasDb || []).filter((r: any) => {
+        if (!entradasRecorrentesMap.has(r.id_entrada)) return false;
+        const fim = entradasRecorrentesMap.get(r.id_entrada);
+        return !fim || r.mes_ano <= fim;
+      });
       const totalInflows =
-        (allRegEntradasDb || []).reduce((acc, r) => acc + Number(r.valor_real), 0) +
+        validRegEntradas.reduce((acc, r) => acc + Number(r.valor_real), 0) +
         (allPontualEntradasDb || []).reduce((acc, e) => acc + Number(e.valor_previsto_base), 0) +
         totalSalariosInflow;
 
@@ -368,8 +380,14 @@ export function Dashboard() {
         totalFaturasOutflow += ccBillPreviousMonth;
       }
 
+      const validRegGastosFixos = (allGastosFixosDb || []).filter((r: any) => {
+        if (!gastosFixosMap.has(r.id_gasto_fixo)) return false;
+        const fim = gastosFixosMap.get(r.id_gasto_fixo);
+        return !fim || r.mes_ano <= fim;
+      });
+
       const totalOutflows = 
-        (allGastosFixosDb || []).reduce((acc, r) => acc + Number(r.valor_real), 0) +
+        validRegGastosFixos.reduce((acc, r) => acc + Number(r.valor_real), 0) +
         (allGastosDiariosDb || []).reduce((acc, r) => acc + Number(r.valor_gasto), 0) +
         totalFaturasOutflow;
 

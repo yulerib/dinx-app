@@ -121,10 +121,12 @@ export const gastosDiariosService = {
   },
 
   // Edita um lançamento individual
-  async updateRegistroDiario(id_registro: string, valor_gasto: number, descricao: string): Promise<void> {
+  async updateRegistroDiario(id_registro: string, valor_gasto: number, descricao: string, data?: string): Promise<void> {
+    const payload: Record<string, any> = { valor_gasto, descricao };
+    if (data) payload.data = data;
     const { error } = await supabase
       .from('registros_diarios')
-      .update({ valor_gasto, descricao })
+      .update(payload)
       .eq('id_registro', id_registro);
     if (error) throw error;
   },

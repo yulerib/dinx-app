@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Button } from './Button';
 import { M3Icon } from './M3Icon';
@@ -21,7 +22,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed',
       top: 0, left: 0, right: 0, bottom: 0,
@@ -30,20 +31,25 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 100,
-      padding: '1rem'
+      zIndex: 1150,
+      padding: '1rem',
+      overflowY: 'auto'
     }}>
       <div className="card modal-card" style={{
         width: '100%',
         maxWidth: '500px',
+        maxHeight: 'calc(100dvh - 2rem)',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
         position: 'relative',
         animation: 'modalSlideIn 0.2s ease-out'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexShrink: 0, gap: '0.75rem' }}>
           <h2 className="text-h2" style={{ margin: 0 }}>{title}</h2>
-          <Button variant="outline" onClick={onClose} icon={<M3Icon name="close" lucideIcon={<X size={20} />} />} style={{ padding: '0.25rem' }} />
+          <Button variant="outline" onClick={onClose} icon={<M3Icon name="close" lucideIcon={<X size={20} />} />} style={{ padding: '0.25rem', flexShrink: 0 }} />
         </div>
-        <div>
+        <div style={{ flex: 1, minHeight: 0 }}>
           {children}
         </div>
       </div>
@@ -53,6 +59,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
           to { transform: translateY(0); opacity: 1; }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 }

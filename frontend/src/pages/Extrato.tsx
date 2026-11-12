@@ -222,7 +222,7 @@ export function Extrato() {
         let fixedM = 0;
         regGastosFixos.forEach(reg => {
           const parent = gastosFixos.find(f => f.id === reg.id_gasto_fixo);
-          if (parent) {
+          if (parent && (!parent.mes_ano_fim || reg.mes_ano <= parent.mes_ano_fim)) {
             let pagouEmM = false;
             if (reg.data_pagamento_real) {
               pagouEmM = reg.data_pagamento_real.substring(0, 7) === m;
@@ -270,7 +270,7 @@ export function Extrato() {
           .filter(r => r.mes_ano === m && r.afeta_conta_geral)
           .forEach(r => {
             const parent = dbMovsReservaList.find(mov => mov.id === r.id_movimentacao);
-            if (parent) {
+            if (parent && (!parent.mes_ano_fim || r.mes_ano <= parent.mes_ano_fim)) {
               if (parent.tipo === 'saida') reservaInflowsM += Number(r.valor_real);
               else reservaOutflowsM += Number(r.valor_real);
             }
@@ -307,10 +307,12 @@ export function Extrato() {
       });
 
       recorrentesNoMes.forEach(e => {
-        const entryDay = Number(e.data_entrada.split('-')[2]);
         const reg = regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === mesAno);
 
         if (reg && Number(reg.valor_real) > 0) {
+          const entryDay = reg.data_recebimento_real
+            ? Number(reg.data_recebimento_real.split('-')[2])
+            : (reg.dia_recebimento_real || Number(e.data_entrada.split('-')[2]));
           listMovimentos.push({
             id: `inflow-${e.id}-real`,
             dia: entryDay,
@@ -370,7 +372,7 @@ export function Extrato() {
       // C. Gastos Fixos — pagos fisicamente neste mês
       regGastosFixos.forEach(reg => {
         const parent = gastosFixos.find(f => f.id === reg.id_gasto_fixo);
-        if (parent && reg.valor_real > 0) {
+        if (parent && (!parent.mes_ano_fim || reg.mes_ano <= parent.mes_ano_fim) && reg.valor_real > 0) {
           let pagouNoMes = false;
           let diaPago = reg.dia_pagamento_real || parent.dia_pagamento_previsto;
 
@@ -579,7 +581,9 @@ export function Extrato() {
         } else {
           const reg = dbRegsReservaList.find(r => r.id_movimentacao === mov.id && r.mes_ano === mesAno);
           if (reg) {
-            const paidDay = reg.dia_movimentacao_real || mov.dia_movimentacao_previsto;
+            const paidDay = reg.data_movimentacao_real
+              ? Number(reg.data_movimentacao_real.split('-')[2])
+              : (reg.dia_movimentacao_real || mov.dia_movimentacao_previsto);
             listMovimentos.push({
               id: `reserva-${mov.id}-real`,
               dia: paidDay,

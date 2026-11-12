@@ -180,12 +180,11 @@ export function Assistente() {
 
   if (isCheckingKey) {
     return (
-      <div style={{
+      <div className="assistente-container" style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 'calc(100vh - 120px)',
       }}>
         <div style={{
           width: '40px', height: '40px',
@@ -197,6 +196,15 @@ export function Assistente() {
         }} />
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Verificando configurações da IA...</p>
         <style>{`
+          .assistente-container {
+            height: calc(100dvh - 120px);
+          }
+          @media (max-width: 768px) {
+            .assistente-container {
+              height: calc(100dvh - 280px - env(safe-area-inset-bottom, 0px));
+              min-height: 360px;
+            }
+          }
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -208,14 +216,23 @@ export function Assistente() {
 
   if (!hasKey) {
     return (
-      <div style={{
+      <div className="assistente-container" style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 'calc(100vh - 120px)',
         padding: '1.5rem',
       }}>
+        <style>{`
+          .assistente-container {
+            min-height: calc(100dvh - 120px);
+          }
+          @media (max-width: 768px) {
+            .assistente-container {
+              min-height: calc(100dvh - 280px - env(safe-area-inset-bottom, 0px));
+            }
+          }
+        `}</style>
         <div style={{
           maxWidth: '450px',
           width: '100%',
@@ -314,14 +331,13 @@ export function Assistente() {
   }
 
   return (
-    <div style={{
+    <div className="assistente-container" style={{
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 120px)',
       maxHeight: '100%',
     }}>
       {/* Header */}
-      <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="assistente-header" style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div>
           <h1 className="text-h1" style={{ margin: 0 }}>Assistente Financeiro</h1>
           <p className="text-muted" style={{ margin: '0.25rem 0 0 0' }}>
@@ -607,6 +623,15 @@ export function Assistente() {
       </form>
 
       <style>{`
+        .assistente-container {
+          height: calc(100dvh - 120px);
+        }
+        @media (max-width: 768px) {
+          .assistente-container {
+            height: calc(100dvh - 280px - env(safe-area-inset-bottom, 0px));
+            min-height: 400px;
+          }
+        }
         @keyframes bounce {
           0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
           40% { transform: scale(1); opacity: 1; }

@@ -225,7 +225,8 @@ function saldoOficialAbertura(raw: HzRaw, target: string): number {
     raw.fixos
       .filter(f => {
         const created = !f.created_at || getLocalYearMonth(f.created_at) <= m;
-        return created && (f.ativo || raw.regFixos.some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
+        const notEnded = !f.mes_ano_fim || f.mes_ano_fim >= m;
+        return created && notEnded && (f.ativo || raw.regFixos.some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
       })
       .forEach(f => {
         const reg = raw.regFixos.find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
@@ -249,11 +250,17 @@ function saldoOficialAbertura(raw: HzRaw, target: string): number {
     raw.movsReserva
       .filter(mv => !mv.projetar && mv.data_movimentacao.substring(0, 7) === m && mv.afeta_conta_geral)
       .forEach(mv => (mv.tipo === 'saida' ? (resIn += Number(mv.valor_previsto_base)) : (resOut += Number(mv.valor_previsto_base))));
-    raw.regsReserva
-      .filter(r => r.mes_ano === m && r.afeta_conta_geral)
-      .forEach(r => {
-        const p = raw.movsReserva.find(mv => mv.id === r.id_movimentacao);
-        if (p) p.tipo === 'saida' ? (resIn += Number(r.valor_real)) : (resOut += Number(r.valor_real));
+    raw.movsReserva
+      .filter(mv => mv.projetar && mv.data_movimentacao.substring(0, 7) <= m && (!mv.mes_ano_fim || mv.mes_ano_fim >= m))
+      .forEach(mv => {
+        const reg = raw.regsReserva.find(r => r.id_movimentacao === mv.id && r.mes_ano === m);
+        if (reg) {
+          if (reg.afeta_conta_geral) {
+            mv.tipo === 'saida' ? (resIn += Number(reg.valor_real)) : (resOut += Number(reg.valor_real));
+          }
+        } else if (mv.ativo && mv.afeta_conta_geral) {
+          mv.tipo === 'saida' ? (resIn += Number(mv.valor_previsto_base)) : (resOut += Number(mv.valor_previsto_base));
+        }
       });
 
     saldo += inflows + resIn - fixed - daily - cc - resOut;
@@ -318,7 +325,12 @@ function buildMonthBase(raw: HzRaw, mesAno: string): BaseCells {
       const reg = raw.regEntradas.find(r => r.id_entrada === e.id && r.mes_ano === mesAno);
       const exec = !!reg && Number(reg.valor_real) > 0;
       if (!exec && !e.ativo) return;
-      push(dayOf(e.data_entrada), 'entrada', {
+      let dia = dayOf(e.data_entrada);
+      if (exec) {
+        if (reg.data_recebimento_real && reg.data_recebimento_real.substring(0, 7) === mesAno) dia = dayOf(reg.data_recebimento_real);
+        else if (reg.dia_recebimento_real) dia = Number(reg.dia_recebimento_real);
+      }
+      push(dia, 'entrada', {
         id: `entrada_recorrente_${e.id}`,
         descricao: e.descricao,
         valor: exec ? Number(reg.valor_real) : Number(e.valor_previsto_base),
@@ -328,7 +340,7 @@ function buildMonthBase(raw: HzRaw, mesAno: string): BaseCells {
 
   // d) Gastos fixos
   raw.fixos
-    .filter(f => !f.created_at || getLocalYearMonth(f.created_at) <= mesAno)
+    .filter(f => (!f.created_at || getLocalYearMonth(f.created_at) <= mesAno) && (!f.mes_ano_fim || f.mes_ano_fim >= mesAno))
     .forEach(f => {
       const reg = raw.regFixos.find(r => r.id_gasto_fixo === f.id && r.mes_ano === mesAno);
       const pago = isGastoFixoPago(reg);
@@ -404,7 +416,10 @@ function buildMonthBase(raw: HzRaw, mesAno: string): BaseCells {
     const reg = raw.regsReserva.find(r => r.id_movimentacao === mv.id && r.mes_ano === mesAno);
     if (reg) {
       if (!reg.afeta_conta_geral) return;
-      push(reg.dia_movimentacao_real || mv.dia_movimentacao_previsto || 15, col, {
+      const dia = (reg.data_movimentacao_real && reg.data_movimentacao_real.substring(0, 7) === mesAno)
+        ? dayOf(reg.data_movimentacao_real)
+        : (reg.dia_movimentacao_real || mv.dia_movimentacao_previsto || 15);
+      push(dia, col, {
         id: `reserva_${mv.id}`,
         descricao: desc,
         valor: Number(reg.valor_real),

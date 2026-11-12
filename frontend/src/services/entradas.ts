@@ -70,6 +70,8 @@ export const entradasService = {
             id_entrada: 'salario-virtual',
             mes_ano: mesAno,
             valor_real: salario.valor_real,
+            dia_recebimento_real: salario.data_real ? Number(salario.data_real.split('-')[2]) : null,
+            data_recebimento_real: salario.data_real || null,
             created_at: salario.created_at || new Date().toISOString()
           } : null
         };
@@ -165,7 +167,9 @@ export const entradasService = {
   async upsertRegistroEntrada(
     id_entrada: string,
     mes_ano: string,
-    valor_real: number
+    valor_real: number,
+    dia_recebimento_real?: number | null,
+    data_recebimento_real?: string | null
   ): Promise<RegistroEntrada> {
     const { data: existing, error: errExist } = await supabase
       .from('registros_entradas')
@@ -176,10 +180,14 @@ export const entradasService = {
 
     if (errExist) throw errExist;
 
+    const payload: Record<string, any> = { valor_real };
+    if (dia_recebimento_real !== undefined) payload.dia_recebimento_real = dia_recebimento_real;
+    if (data_recebimento_real !== undefined) payload.data_recebimento_real = data_recebimento_real;
+
     if (existing) {
       const { data, error } = await supabase
         .from('registros_entradas')
-        .update({ valor_real })
+        .update(payload)
         .eq('id_registro', existing.id_registro)
         .select()
         .single();
@@ -189,7 +197,7 @@ export const entradasService = {
     } else {
       const { data, error } = await supabase
         .from('registros_entradas')
-        .insert([{ id_entrada, mes_ano, valor_real }])
+        .insert([{ id_entrada, mes_ano, ...payload }])
         .select()
         .single();
 
@@ -198,11 +206,30 @@ export const entradasService = {
     }
   },
 
+  // Estorna / limpa o recebimento de uma entrada recorrente no mês
+  async clearRecebimento(id_entrada: string, mes_ano: string): Promise<void> {
+    const { error } = await supabase
+      .from('registros_entradas')
+      .delete()
+      .eq('id_entrada', id_entrada)
+      .eq('mes_ano', mes_ano);
+
+    if (error) throw error;
+  },
+
   // Atualiza uma Entrada base existente
   async updateEntrada(
     id: string,
     updates: Partial<Omit<Entrada, 'id' | 'created_at'>>
   ): Promise<Entrada> {
+    if (updates.mes_ano_fim) {
+      await supabase
+        .from('registros_entradas')
+        .delete()
+        .eq('id_entrada', id)
+        .gt('mes_ano', updates.mes_ano_fim);
+    }
+
     const { data, error } = await supabase
       .from('entradas')
       .update({ ...updates, desvio_competencia: 0 })
@@ -214,8 +241,40 @@ export const entradasService = {
     return data;
   },
 
-  // Remove uma entrada base (deleta registros por CASCADE configurado no banco de dados)
-  async deleteEntrada(id: string): Promise<void> {
+  // Encerra uma entrada recorrente a partir do mês informado (mantendo o histórico anterior) ou exclui se for pontual/iniciada no mesmo mês
+  async deleteEntrada(id: string, aPartirDeMesAno?: string): Promise<void> {
+    if (aPartirDeMesAno) {
+      const [{ data: entrada }, { data: regsAnteriores }] = await Promise.all([
+        supabase.from('entradas').select('*').eq('id', id).maybeSingle(),
+        supabase.from('registros_entradas').select('id_registro').eq('id_entrada', id).lt('mes_ano', aPartirDeMesAno).limit(1)
+      ]);
+
+      if (entrada && entrada.projetar) {
+        const startMonth = entrada.data_entrada.substring(0, 7);
+        const existedBefore = startMonth < aPartirDeMesAno || (regsAnteriores && regsAnteriores.length > 0);
+
+        if (existedBefore) {
+          const [year, month] = aPartirDeMesAno.split('-').map(Number);
+          const prevDate = new Date(year, month - 2, 1);
+          const mesFim = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+          const { error: errDelRegs } = await supabase
+            .from('registros_entradas')
+            .delete()
+            .eq('id_entrada', id)
+            .gte('mes_ano', aPartirDeMesAno);
+          if (errDelRegs) throw errDelRegs;
+
+          const { error: errUpd } = await supabase
+            .from('entradas')
+            .update({ mes_ano_fim: mesFim, ativo: true })
+            .eq('id', id);
+          if (errUpd) throw errUpd;
+          return;
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('entradas')
       .delete()

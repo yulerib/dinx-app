@@ -73,7 +73,8 @@ export const reservaService = {
     mes_ano: string,
     valor_real: number,
     dia_movimentacao_real: number | null,
-    options: { afeta_conta_geral: boolean; gerar_saldo_devedor: boolean; quitar_saldo_devedor: boolean }
+    options: { afeta_conta_geral: boolean; gerar_saldo_devedor: boolean; quitar_saldo_devedor: boolean },
+    data_movimentacao_real?: string | null
   ): Promise<RegistroMovimentacaoReserva> {
     const { data: existing, error: errExist } = await supabase
       .from('registros_movimentacoes_reserva')
@@ -84,7 +85,7 @@ export const reservaService = {
 
     if (errExist) throw errExist;
 
-    const payload = {
+    const payload: Record<string, any> = {
       id_movimentacao,
       mes_ano,
       valor_real,
@@ -93,6 +94,9 @@ export const reservaService = {
       gerar_saldo_devedor: options.gerar_saldo_devedor,
       quitar_saldo_devedor: options.quitar_saldo_devedor
     };
+    if (data_movimentacao_real !== undefined) {
+      payload.data_movimentacao_real = data_movimentacao_real;
+    }
 
     if (existing) {
       // Atualiza o registro existente
@@ -118,11 +122,30 @@ export const reservaService = {
     }
   },
 
+  // Desfaz/limpa o registro de realização de uma movimentação recorrente no mês
+  async clearRealizacao(id_movimentacao: string, mes_ano: string): Promise<void> {
+    const { error } = await supabase
+      .from('registros_movimentacoes_reserva')
+      .delete()
+      .eq('id_movimentacao', id_movimentacao)
+      .eq('mes_ano', mes_ano);
+
+    if (error) throw error;
+  },
+
   // Atualiza uma movimentação base existente
   async updateMovimentacao(
     id: string,
     updates: Partial<Omit<MovimentacaoReserva, 'id' | 'created_at'>>
   ): Promise<MovimentacaoReserva> {
+    if (updates.mes_ano_fim) {
+      await supabase
+        .from('registros_movimentacoes_reserva')
+        .delete()
+        .eq('id_movimentacao', id)
+        .gt('mes_ano', updates.mes_ano_fim);
+    }
+
     const { data, error } = await supabase
       .from('movimentacoes_reserva')
       .update(updates)
@@ -134,8 +157,40 @@ export const reservaService = {
     return data;
   },
 
-  // Remove uma movimentação base (deleta registros por CASCADE no banco de dados)
-  async deleteMovimentacao(id: string): Promise<void> {
+  // Encerra uma movimentação recorrente a partir do mês informado (mantendo o histórico anterior) ou exclui se for pontual/iniciada no mesmo mês
+  async deleteMovimentacao(id: string, aPartirDeMesAno?: string): Promise<void> {
+    if (aPartirDeMesAno) {
+      const [{ data: mov }, { data: regsAnteriores }] = await Promise.all([
+        supabase.from('movimentacoes_reserva').select('*').eq('id', id).maybeSingle(),
+        supabase.from('registros_movimentacoes_reserva').select('id_registro').eq('id_movimentacao', id).lt('mes_ano', aPartirDeMesAno).limit(1)
+      ]);
+
+      if (mov && mov.projetar) {
+        const startMonth = mov.data_movimentacao.substring(0, 7);
+        const existedBefore = startMonth < aPartirDeMesAno || (regsAnteriores && regsAnteriores.length > 0);
+
+        if (existedBefore) {
+          const [year, month] = aPartirDeMesAno.split('-').map(Number);
+          const prevDate = new Date(year, month - 2, 1);
+          const mesFim = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+          const { error: errDelRegs } = await supabase
+            .from('registros_movimentacoes_reserva')
+            .delete()
+            .eq('id_movimentacao', id)
+            .gte('mes_ano', aPartirDeMesAno);
+          if (errDelRegs) throw errDelRegs;
+
+          const { error: errUpd } = await supabase
+            .from('movimentacoes_reserva')
+            .update({ mes_ano_fim: mesFim, ativo: true })
+            .eq('id', id);
+          if (errUpd) throw errUpd;
+          return;
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('movimentacoes_reserva')
       .delete()
@@ -195,10 +250,11 @@ export const reservaService = {
     // 2. Processar registros de movimentações recorrentes
     listRegs.forEach(r => {
       const parentMov = listMovs.find(m => m.id === r.id_movimentacao);
+      if (parentMov && parentMov.mes_ano_fim && r.mes_ano > parentMov.mes_ano_fim) return;
       const desc = parentMov ? parentMov.descricao : 'Movimentação Recorrente';
       const tipo = parentMov ? parentMov.tipo : 'entrada';
       const dia = r.dia_movimentacao_real || (parentMov ? parentMov.dia_movimentacao_previsto : 10);
-      const dataMov = `${r.mes_ano}-${String(dia).padStart(2, '0')}`;
+      const dataMov = r.data_movimentacao_real || `${r.mes_ano}-${String(dia).padStart(2, '0')}`;
 
       historico.push({
         id: `registro-${r.id_registro}`,

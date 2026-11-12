@@ -252,7 +252,7 @@ tr.is-today .hz-dia-wk::after { content: ' · hoje'; color: var(--text-main); fo
 /* Tooltip */
 .hz-tooltip {
   position: fixed;
-  z-index: 1000;
+  z-index: 1150;
   width: 280px;
   background: var(--bg-main);
   border: 1px solid var(--hz-grid-strong);
@@ -453,12 +453,13 @@ tr.is-today .hz-dia-wk::after { content: ' · hoje'; color: var(--text-main); fo
 }
 
 @media (max-width: 768px) {
+  .hz-page, .hz-container { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
   .hz-sheet { font-size: 0.78rem; min-width: 600px; }
   .hz-cell { min-width: 92px; }
   .hz-cell-inner, .hz-input, .hz-saldo, .hz-foot, .hz-sheet thead th { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
   .hz-th-dia { width: 60px; }
   .hz-dia { padding: 0 0.5rem !important; }
-  .hz-sheet-wrap { max-height: calc(100vh - 260px); }
+  .hz-sheet-wrap { max-height: calc(100dvh - 350px); min-height: 280px; }
   .hz-legend-count { margin-left: 0; width: 100%; }
   .hz-cell-reset { opacity: 1; }
   .hz-modal-item-row { flex-direction: column; align-items: stretch; gap: 0.4rem; }

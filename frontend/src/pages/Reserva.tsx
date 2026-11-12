@@ -36,10 +36,11 @@ export function Reserva() {
   const [gerarSaldoDevedor, setGerarSaldoDevedor] = useState(false);
   const [quitarSaldoDevedor, setQuitarSaldoDevedor] = useState(false);
 
-  // Inline Realization State (para movimentações recorrentes)
-  const [realizandoId, setRealizandoId] = useState<string | null>(null);
+  // Realization Modal State (para movimentações recorrentes)
+  const [movToRealize, setMovToRealize] = useState<MovimentacaoReservaMensal | null>(null);
+  const [isRealizeModalOpen, setIsRealizeModalOpen] = useState(false);
   const [valorRealInput, setValorRealInput] = useState<number>(0);
-  const [diaRealInput, setDiaRealInput] = useState<number>(10);
+  const [realizeDataInput, setRealizeDataInput] = useState<string>('');
 
   // Extrato filter state
   const [filtroSaldoDevedor, setFiltroSaldoDevedor] = useState(false);
@@ -164,44 +165,89 @@ export function Reserva() {
     }
   };
 
-  const handleDeleteMovimentacao = async (id: string) => {
-    if (!confirm('Deseja excluir esta movimentação? Todos os registros dela nos meses também serão apagados.')) return;
+  const handleDeleteMovimentacao = async (mov: MovimentacaoReservaMensal) => {
+    const msg = mov.projetar
+      ? 'Deseja encerrar/apagar esta movimentação recorrente da reserva a partir deste mês? Os lançamentos e previsões dos meses anteriores permanecerão no histórico.'
+      : 'Deseja excluir esta movimentação?';
+    if (!confirm(msg)) return;
     try {
-      await reservaService.deleteMovimentacao(id);
+      await reservaService.deleteMovimentacao(mov.id, mesAno);
       await fetchData();
     } catch (error: any) {
       alert('Erro ao excluir: ' + (error.message || JSON.stringify(error)));
     }
   };
 
-  // Abre interface inline para realizar/confirmar movimentação recorrente
+  // Abre modal para realizar/confirmar movimentação recorrente
   const handleStartRealize = (mov: MovimentacaoReservaMensal) => {
-    setRealizandoId(mov.id);
-    setValorRealInput(mov.registro_atual?.valor_real || mov.valor_previsto_base);
-    setDiaRealInput(mov.registro_atual?.dia_movimentacao_real || mov.dia_movimentacao_previsto || new Date().getDate());
+    setMovToRealize(mov);
+    setValorRealInput(mov.registro_atual ? Number(mov.registro_atual.valor_real) : Number(mov.valor_previsto_base));
+
+    if (mov.registro_atual?.data_movimentacao_real) {
+      setRealizeDataInput(mov.registro_atual.data_movimentacao_real);
+    } else if (mov.registro_atual?.dia_movimentacao_real) {
+      setRealizeDataInput(`${mesAno}-${String(mov.registro_atual.dia_movimentacao_real).padStart(2, '0')}`);
+    } else {
+      const pDay = mov.dia_movimentacao_previsto || 10;
+      setRealizeDataInput(`${mesAno}-${String(pDay).padStart(2, '0')}`);
+    }
+    setIsRealizeModalOpen(true);
   };
 
-  const handleSaveRealize = async (mov: MovimentacaoReservaMensal) => {
-    if (valorRealInput <= 0) return;
+  const handleSaveRealize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!movToRealize || valorRealInput <= 0 || !realizeDataInput) return;
     try {
-      setIsLoading(true);
+      setIsSubmitting(true);
+      const selectedMonthIso = realizeDataInput.substring(0, 7);
+      if (selectedMonthIso !== mesAno) {
+        const mesesAbrev = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const mIdxAberto = Number(mesAno.split('-')[1]) - 1;
+        const mIdxSel = Number(selectedMonthIso.split('-')[1]) - 1;
+        const nomeMesAberto = mesesAbrev[mIdxAberto];
+        const nomeMesSel = mesesAbrev[mIdxSel];
+
+        const confirmacao = window.confirm(
+          `Atenção: Você está registrando a movimentação em um dia de outro mês (${nomeMesSel}).\nA contabilidade desta movimentação será mantida no mês aberto (${nomeMesAberto}).\n\nDeseja prosseguir?`
+        );
+        if (!confirmacao) return;
+      }
+
+      const diaReal = Number(realizeDataInput.split('-')[2]);
       await reservaService.upsertRegistroMovimentacao(
-        mov.id,
+        movToRealize.id,
         mesAno,
         valorRealInput,
-        diaRealInput,
+        diaReal,
         {
-          afeta_conta_geral: mov.afeta_conta_geral,
-          gerar_saldo_devedor: mov.gerar_saldo_devedor,
-          quitar_saldo_devedor: mov.quitar_saldo_devedor
-        }
+          afeta_conta_geral: movToRealize.afeta_conta_geral,
+          gerar_saldo_devedor: movToRealize.gerar_saldo_devedor,
+          quitar_saldo_devedor: movToRealize.quitar_saldo_devedor
+        },
+        realizeDataInput
       );
-      setRealizandoId(null);
+      setIsRealizeModalOpen(false);
+      setMovToRealize(null);
       await fetchData();
     } catch (error: any) {
       alert('Erro ao confirmar movimentação: ' + (error.message || JSON.stringify(error)));
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearRealize = async () => {
+    if (!movToRealize) return;
+    try {
+      setIsSubmitting(true);
+      await reservaService.clearRealizacao(movToRealize.id, mesAno);
+      setIsRealizeModalOpen(false);
+      setMovToRealize(null);
+      await fetchData();
+    } catch (error: any) {
+      alert('Erro ao desfazer realização: ' + (error.message || JSON.stringify(error)));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -235,11 +281,15 @@ export function Reserva() {
         const transId = reg ? `registro-${reg.id_registro}` : `projeto-${m.id}`;
         
         if (reg) {
-          const day = reg.dia_movimentacao_real || m.dia_movimentacao_previsto;
+          const day = reg.data_movimentacao_real
+            ? Number(reg.data_movimentacao_real.split('-')[2])
+            : (reg.dia_movimentacao_real || m.dia_movimentacao_previsto);
+          const dataRealStr = reg.data_movimentacao_real || `${mesAno}-${String(day).padStart(2, '0')}`;
           list.push({
             id: transId,
             dia: day,
-            data: `${mesAno}-${String(day).padStart(2, '0')}`,
+            data: dataRealStr,
+            data_movimentacao_real: reg.data_movimentacao_real,
             descricao: `${m.descricao} (Confirmada)`,
             tipo: m.tipo,
             valor: reg.valor_real,
@@ -428,13 +478,16 @@ export function Reserva() {
                 {movimentosExibir.map((item) => {
                   const isReal = item.status === 'realizado';
                   const isEntrada = item.tipo === 'entrada';
-                  const isEditingInline = realizandoId === item.originalMov.id;
 
                   return (
                     <div key={item.id} className={`reserva-item ${item.tipo} ${item.status}`}>
                       <div className="reserva-item-header">
                         <div className="reserva-item-meta">
-                          <span className="reserva-item-day">Dia {String(item.dia).padStart(2, '0')}</span>
+                          <span className="reserva-item-day">
+                            {item.data_movimentacao_real
+                              ? `Dia ${String(item.dia).padStart(2, '0')} (${item.data_movimentacao_real.split('-').reverse().join('/')})`
+                              : `Dia ${String(item.dia).padStart(2, '0')}`}
+                          </span>
                           <span className={`badge-tipo ${item.tipo}`}>
                             {isEntrada ? 'DEPÓSITO' : 'RETIRADA'}
                           </span>
@@ -450,7 +503,7 @@ export function Reserva() {
                         </div>
                         <div className="reserva-item-actions">
                           <button onClick={() => handleOpenEditModal(item.originalMov)} className="btn-icon" title="Editar"><Edit2 size={14} /></button>
-                          <button onClick={() => handleDeleteMovimentacao(item.originalMov.id)} className="btn-icon text-danger" title="Excluir"><Trash2 size={14} /></button>
+                          <button onClick={() => handleDeleteMovimentacao(item.originalMov)} className="btn-icon text-danger" title="Excluir"><Trash2 size={14} /></button>
                         </div>
                       </div>
 
@@ -465,44 +518,29 @@ export function Reserva() {
                         </div>
 
                         <div className="reserva-item-value-section">
-                          {isEditingInline ? (
-                            <div className="realize-inline-form">
-                              <div style={{ maxWidth: '120px' }}>
-                                <CurrencyInput
-                                  value={valorRealInput}
-                                  onChange={(v) => setValorRealInput(v)}
-                                />
-                              </div>
-                              <input
-                                type="number"
-                                min="1"
-                                max="31"
-                                value={diaRealInput}
-                                onChange={(e) => setDiaRealInput(Number(e.target.value))}
-                                style={{ width: '50px', padding: '0.25rem', border: '1px solid var(--border-color)', borderRadius: '4px' }}
-                                title="Dia Realizado"
-                              />
-                              <button onClick={() => handleSaveRealize(item.originalMov)} className="btn-confirm" title="Salvar Realizado"><Check size={14} /></button>
-                              <button onClick={() => setRealizandoId(null)} className="btn-cancel-inline">Cancelar</button>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <span className={`reserva-value ${isEntrada ? 'text-positive' : 'text-negative'}`}>
-                                {isEntrada ? '+' : '-'} {formatBRL(item.valor)}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <span className={`reserva-value ${isEntrada ? 'text-positive' : 'text-negative'}`}>
+                              {isEntrada ? '+' : '-'} {formatBRL(item.valor)}
+                            </span>
+                            {!isReal && item.isRecorrente && (
+                              <button
+                                onClick={() => handleStartRealize(item.originalMov)}
+                                className="btn-realize-trigger"
+                              >
+                                Confirmar
+                              </button>
+                            )}
+                            {isReal && item.isRecorrente && (
+                              <span
+                                className="realized-badge"
+                                onClick={() => handleStartRealize(item.originalMov)}
+                                style={{ cursor: 'pointer', border: '1px dashed rgba(107, 163, 90, 0.5)' }}
+                                title="Clique para alterar ou desfazer a realização"
+                              >
+                                REALIZADA
                               </span>
-                              {!isReal && item.isRecorrente && (
-                                <button
-                                  onClick={() => handleStartRealize(item.originalMov)}
-                                  className="btn-realize-trigger"
-                                >
-                                  Confirmar
-                                </button>
-                              )}
-                              {isReal && item.isRecorrente && (
-                                <span className="realized-badge">REALIZADA</span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -718,6 +756,68 @@ export function Reserva() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Confirmar Movimentação (Recorrente) */}
+      <Modal
+        isOpen={isRealizeModalOpen}
+        onClose={() => setIsRealizeModalOpen(false)}
+        title="Confirmar Movimentação"
+      >
+        {movToRealize && (
+          <form onSubmit={handleSaveRealize}>
+            <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: 'rgba(99, 102, 241, 0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {movToRealize.tipo === 'entrada' ? 'Depósito:' : 'Retirada:'}
+              </span>
+              <strong style={{ marginLeft: '0.5rem', color: 'var(--text-main)' }}>{movToRealize.descricao}</strong>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Valor Projetado: <strong>{formatBRL(movToRealize.valor_previsto_base)}</strong>
+              </div>
+            </div>
+
+            <CurrencyInput
+              label="Valor Efetivamente Realizado"
+              value={valorRealInput}
+              onChange={(v) => setValorRealInput(v)}
+              required
+            />
+
+            <div className="input-group" style={{ marginTop: '1rem' }}>
+              <label>Data Real da Movimentação</label>
+              <input
+                type="date"
+                className="input"
+                value={realizeDataInput}
+                onChange={(e) => setRealizeDataInput(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', gap: '1rem' }}>
+              {movToRealize.registro_atual ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClearRealize}
+                  style={{ borderColor: 'var(--danger, #ef4444)', color: 'var(--danger, #ef4444)' }}
+                  disabled={isSubmitting}
+                >
+                  Desfazer Realização
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Button type="button" variant="outline" onClick={() => setIsRealizeModalOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmitting || valorRealInput <= 0 || !realizeDataInput}>
+                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

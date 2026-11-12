@@ -204,9 +204,9 @@ export function GastosFixos() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta despesa fixa? Todos os registros dela nos meses também serão apagados.')) return;
+    if (!confirm('Deseja encerrar/apagar esta despesa fixa a partir deste mês? Os lançamentos e previsões dos meses anteriores permanecerão no histórico.')) return;
     try {
-      await gastosFixosService.deleteGastoFixo(id);
+      await gastosFixosService.deleteGastoFixo(id, mesAno);
       await fetchGastos();
     } catch (error: any) {
       alert('Falha ao excluir: ' + (error.message || JSON.stringify(error)));

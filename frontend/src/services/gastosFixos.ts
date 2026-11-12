@@ -29,6 +29,14 @@ export function isGastoFixoPago(registro: RegistroGastoFixo | null | undefined):
   );
 }
 
+export function getMesAnoAnteriorHelper(mesAnoStr: string): string {
+  const [year, month] = mesAnoStr.split('-').map(Number);
+  const date = new Date(year, month - 2, 1);
+  const newY = date.getFullYear();
+  const newM = String(date.getMonth() + 1).padStart(2, '0');
+  return `${newY}-${newM}`;
+}
+
 export const gastosFixosService = {
   // Busca todas as despesas ativas e seus registros para o mês atual
   async fetchGastosMensais(mesAno: string): Promise<GastoFixoMensal[]> {
@@ -43,8 +51,12 @@ export const gastosFixosService = {
 
     if (!gastos || gastos.length === 0) return [];
 
-    // Filter to only include expenses created in or before the requested month (mesAno)
-    const activeGastos = gastos.filter(g => !g.created_at || getLocalYearMonth(g.created_at) <= mesAno);
+    // Filter to only include expenses active in the requested month (mesAno)
+    const activeGastos = gastos.filter(g => {
+      const startsOnOrBefore = !g.created_at || getLocalYearMonth(g.created_at) <= mesAno;
+      const endsOnOrAfter = !g.mes_ano_fim || g.mes_ano_fim >= mesAno;
+      return startsOnOrBefore && endsOnOrAfter;
+    });
 
     if (activeGastos.length === 0) return [];
 
@@ -181,8 +193,38 @@ export const gastosFixosService = {
     if (error) throw error;
   },
 
-  // Exclui um Gasto Fixo e seus registros
-  async deleteGastoFixo(id: string): Promise<void> {
+  // Encerra um Gasto Fixo a partir do mês informado (mantendo o histórico dos meses anteriores) ou exclui caso tenha iniciado no próprio mês
+  async deleteGastoFixo(id: string, aPartirDeMesAno?: string): Promise<void> {
+    if (aPartirDeMesAno) {
+      const [{ data: gasto }, { data: regsAnteriores }] = await Promise.all([
+        supabase.from('gastos_fixos').select('*').eq('id', id).maybeSingle(),
+        supabase.from('registros_gastos_fixos').select('id_registro').eq('id_gasto_fixo', id).lt('mes_ano', aPartirDeMesAno).limit(1)
+      ]);
+
+      const startMonth = gasto?.created_at ? getLocalYearMonth(gasto.created_at) : '';
+      const existedBefore = (startMonth && startMonth < aPartirDeMesAno) || (regsAnteriores && regsAnteriores.length > 0);
+
+      if (existedBefore) {
+        const mesFim = getMesAnoAnteriorHelper(aPartirDeMesAno);
+
+        // Remove registros deste mês em diante para não deixar resíduos futuros
+        const { error: errDelRegs } = await supabase
+          .from('registros_gastos_fixos')
+          .delete()
+          .eq('id_gasto_fixo', id)
+          .gte('mes_ano', aPartirDeMesAno);
+        if (errDelRegs) throw errDelRegs;
+
+        // Encerra a recorrência no mês imediatamente anterior
+        const { error: errUpd } = await supabase
+          .from('gastos_fixos')
+          .update({ mes_ano_fim: mesFim, ativo: true })
+          .eq('id', id);
+        if (errUpd) throw errUpd;
+        return;
+      }
+    }
+
     const { error } = await supabase
       .from('gastos_fixos')
       .delete()

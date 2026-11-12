@@ -190,7 +190,8 @@ export const chartsService = {
 
       activeFixos.forEach(f => {
         const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= month;
-        if (!isCreated) return;
+        const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= month;
+        if (!isCreated || !isNotEnded) return;
 
         const reg = regFixos.find(r => r.id_gasto_fixo === f.id && r.mes_ano === month);
         
@@ -379,7 +380,8 @@ export const chartsService = {
       let fixedM = 0;
       const fixosVigentes = (dbGastosFixos || []).filter(f => {
         const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= m;
-        return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
+        const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= m;
+        return isCreated && isNotEnded && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
       });
 
       fixosVigentes.forEach(f => {
@@ -424,13 +426,18 @@ export const chartsService = {
           else reservaOutflowsM += Number(mov.valor_previsto_base);
         });
 
-      (dbRegsReserva || [])
-        .filter(r => r.mes_ano === m && r.afeta_conta_geral)
-        .forEach(r => {
-          const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
-          if (parent) {
-            if (parent.tipo === 'saida') reservaInflowsM += Number(r.valor_real);
-            else reservaOutflowsM += Number(r.valor_real);
+      (dbMovsReserva || [])
+        .filter(mov => mov.projetar && mov.data_movimentacao.substring(0, 7) <= m && (!mov.mes_ano_fim || mov.mes_ano_fim >= m))
+        .forEach(mov => {
+          const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === m);
+          if (reg) {
+            if (reg.afeta_conta_geral) {
+              if (mov.tipo === 'saida') reservaInflowsM += Number(reg.valor_real);
+              else reservaOutflowsM += Number(reg.valor_real);
+            }
+          } else if (mov.ativo && mov.afeta_conta_geral) {
+            if (mov.tipo === 'saida') reservaInflowsM += Number(mov.valor_previsto_base);
+            else reservaOutflowsM += Number(mov.valor_previsto_base);
           }
         });
 
@@ -474,7 +481,8 @@ export const chartsService = {
 
     const activeFixos = (dbGastosFixos || []).filter(f => {
       const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= currentMonthIso;
-      return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso));
+      const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= currentMonthIso;
+      return isCreated && isNotEnded && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso));
     });
 
     const totalLimiteMensalCategorias = (dbCategoriasDiarias || []).reduce((sum, c) => sum + Number(c.limite_mensal), 0);
@@ -493,11 +501,14 @@ export const chartsService = {
       });
 
       recorrentesNoMes.forEach(e => {
-        const entryDay = Number(e.data_entrada.split('-')[2]);
+        const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
+        const isExec = reg !== undefined && reg !== null && Number(reg.valor_real) > 0;
+        const entryDay = isExec
+          ? (reg!.data_recebimento_real ? Number(reg!.data_recebimento_real.split('-')[2]) : (reg!.dia_recebimento_real || Number(e.data_entrada.split('-')[2])))
+          : Number(e.data_entrada.split('-')[2]);
         if (entryDay === d) {
-          const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
-          if (reg && Number(reg.valor_real) > 0) {
-            inflowsDay += Number(reg.valor_real);
+          if (isExec) {
+            inflowsDay += Number(reg!.valor_real);
           } else if (e.ativo) {
             inflowsDay += Number(e.valor_previsto_base);
           }
@@ -734,7 +745,8 @@ export const chartsService = {
       let fixedM = 0;
       const fixosVigentes = (dbGastosFixos || []).filter(f => {
         const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= m;
-        return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
+        const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= m;
+        return isCreated && isNotEnded && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
       });
 
       fixosVigentes.forEach(f => {
@@ -769,13 +781,18 @@ export const chartsService = {
           else reservaOutflowsM += Number(mov.valor_previsto_base);
         });
 
-      (dbRegsReserva || [])
-        .filter(r => r.mes_ano === m && r.afeta_conta_geral)
-        .forEach(r => {
-          const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
-          if (parent) {
-            if (parent.tipo === 'saida') reservaInflowsM += Number(r.valor_real);
-            else reservaOutflowsM += Number(r.valor_real);
+      (dbMovsReserva || [])
+        .filter(mov => mov.projetar && mov.data_movimentacao.substring(0, 7) <= m && (!mov.mes_ano_fim || mov.mes_ano_fim >= m))
+        .forEach(mov => {
+          const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === m);
+          if (reg) {
+            if (reg.afeta_conta_geral) {
+              if (mov.tipo === 'saida') reservaInflowsM += Number(reg.valor_real);
+              else reservaOutflowsM += Number(reg.valor_real);
+            }
+          } else if (mov.ativo && mov.afeta_conta_geral) {
+            if (mov.tipo === 'saida') reservaInflowsM += Number(mov.valor_previsto_base);
+            else reservaOutflowsM += Number(mov.valor_previsto_base);
           }
         });
 
@@ -904,7 +921,8 @@ export const chartsService = {
       let fixedM = 0;
       const fixosVigentes = (dbGastosFixos || []).filter(f => {
         const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= m;
-        return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
+        const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= m;
+        return isCreated && isNotEnded && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === m));
       });
       fixosVigentes.forEach(f => {
         const reg = (dbRegGastosFixos || []).find(r => r.id_gasto_fixo === f.id && r.mes_ano === m);
@@ -940,11 +958,16 @@ export const chartsService = {
         if (mov.tipo === 'saida') reservaInflowsM += Number(mov.valor_previsto_base);
         else reservaOutflowsM += Number(mov.valor_previsto_base);
       });
-      (dbRegsReserva || []).filter(r => r.mes_ano === m && r.afeta_conta_geral).forEach(r => {
-        const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
-        if (parent) {
-          if (parent.tipo === 'saida') reservaInflowsM += Number(r.valor_real);
-          else reservaOutflowsM += Number(r.valor_real);
+      (dbMovsReserva || []).filter(mov => mov.projetar && mov.data_movimentacao.substring(0, 7) <= m && (!mov.mes_ano_fim || mov.mes_ano_fim >= m)).forEach(mov => {
+        const reg = (dbRegsReserva || []).find(r => r.id_movimentacao === mov.id && r.mes_ano === m);
+        if (reg) {
+          if (reg.afeta_conta_geral) {
+            if (mov.tipo === 'saida') reservaInflowsM += Number(reg.valor_real);
+            else reservaOutflowsM += Number(reg.valor_real);
+          }
+        } else if (mov.ativo && mov.afeta_conta_geral) {
+          if (mov.tipo === 'saida') reservaInflowsM += Number(mov.valor_previsto_base);
+          else reservaOutflowsM += Number(mov.valor_previsto_base);
         }
       });
 
@@ -957,7 +980,7 @@ export const chartsService = {
       });
       (dbRegsReserva || []).filter(r => r.mes_ano === m).forEach(r => {
         const parent = (dbMovsReserva || []).find(mov => mov.id === r.id_movimentacao);
-        if (parent) {
+        if (parent && (!parent.mes_ano_fim || r.mes_ano <= parent.mes_ano_fim)) {
           if (parent.tipo === 'entrada') reserveBalance += Number(r.valor_real);
           else reserveBalance -= Number(r.valor_real);
         }
@@ -973,7 +996,8 @@ export const chartsService = {
     });
     const activeFixos = (dbGastosFixos || []).filter(f => {
       const isCreated = !f.created_at || getLocalYearMonth(f.created_at) <= currentMonthIso;
-      return isCreated && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso));
+      const isNotEnded = !f.mes_ano_fim || f.mes_ano_fim >= currentMonthIso;
+      return isCreated && isNotEnded && (f.ativo || (dbRegGastosFixos || []).some(r => r.id_gasto_fixo === f.id && r.mes_ano === currentMonthIso));
     });
     const totalLimiteMensalCategorias = (dbCategoriasDiarias || []).reduce((sum, c) => sum + Number(c.limite_mensal), 0);
 
@@ -1055,10 +1079,12 @@ export const chartsService = {
 
       // Recurrent entries
       recorrentesNoMes.forEach(e => {
-        const entryDay = Number(e.data_entrada.split('-')[2]);
+        const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
+        const isExec = reg !== undefined && reg !== null && Number(reg.valor_real) > 0;
+        const entryDay = isExec
+          ? (reg!.data_recebimento_real ? Number(reg!.data_recebimento_real.split('-')[2]) : (reg!.dia_recebimento_real || Number(e.data_entrada.split('-')[2])))
+          : Number(e.data_entrada.split('-')[2]);
         if (entryDay === d) {
-          const reg = (dbRegEntradas || []).find(r => r.id_entrada === e.id && r.mes_ano === currentMonthIso);
-          const isExec = reg !== undefined && reg !== null;
           const value = isExec ? Number(reg!.valor_real) : (e.ativo ? Number(e.valor_previsto_base) : 0);
           if (value > 0 || isExec) {
             entradas.push({ descricao: e.descricao, valor: value, isExecutado: isExec });

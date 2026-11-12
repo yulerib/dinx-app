@@ -21,6 +21,7 @@ A fonte da verdade será o **Supabase**.
 - `nome` (String): Nome da despesa (ex: Aluguel, Internet).
 - `valor_previsto_base` (Number): Valor planejado por padrão.
 - `dia_pagamento_previsto` (Number): Dia projetado para o pagamento (1-31).
+- `mes_ano_fim` (String): Formato YYYY-MM. Até que mês deve projetar (opcional).
 - `ativo` (Boolean): Se a despesa ainda existe.
 
 **Tabela: `Registros_Gastos_Fixos`**
@@ -69,6 +70,8 @@ A fonte da verdade será o **Supabase**.
 - `id_entrada` (UUID REFERENCES Entradas)
 - `mes_ano` (String): Formato YYYY-MM.
 - `valor_real` (Number): Valor efetivamente recebido no mês.
+- `dia_recebimento_real` (Number): Dia em que foi recebido (1-31) (opcional).
+- `data_recebimento_real` (String): Formato YYYY-MM-DD. Data real do recebimento (opcional).
 
 **Tabela: `Observacoes`**
 - `id` (UUID): Identificador único.

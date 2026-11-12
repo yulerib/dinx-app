@@ -3,6 +3,7 @@ export interface GastoFixo {
   nome: string;
   valor_previsto_base: number;
   dia_pagamento_previsto: number;
+  mes_ano_fim?: string | null;
   ativo: boolean;
   created_at: string;
 }
@@ -94,6 +95,8 @@ export interface RegistroEntrada {
   id_entrada: string;
   mes_ano: string; // YYYY-MM
   valor_real: number;
+  dia_recebimento_real?: number | null;
+  data_recebimento_real?: string | null;
   created_at: string;
 }
 
@@ -151,6 +154,7 @@ export interface RegistroMovimentacaoReserva {
   mes_ano: string; // YYYY-MM
   valor_real: number;
   dia_movimentacao_real: number | null;
+  data_movimentacao_real?: string | null;
   afeta_conta_geral: boolean;
   gerar_saldo_devedor: boolean;
   quitar_saldo_devedor: boolean;

@@ -103,11 +103,12 @@ export const aiTools: FunctionDeclaration[] = [
   },
   {
     name: "apagarGastoFixo",
-    description: "Remove uma conta fixa do painel permanentemente.",
+    description: "Encerra/remove uma conta fixa a partir de um mês específico (mantendo o histórico dos meses anteriores).",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
-        id: { type: SchemaType.STRING, description: "ID da conta fixa" }
+        id: { type: SchemaType.STRING, description: "ID da conta fixa" },
+        a_partir_de_mes_ano: { type: SchemaType.STRING, description: "Mês a partir do qual o gasto fixo deixa de existir (YYYY-MM). Se omitido, usa o mês atual." }
       },
       required: ["id"]
     }
@@ -238,11 +239,12 @@ export const aiTools: FunctionDeclaration[] = [
   },
   {
     name: "apagarParcela",
-    description: "Remove uma compra parcelada do sistema.",
+    description: "Remove uma compra parcelada ou encerra uma compra recorrente a partir de determinado mês.",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
-        id: { type: SchemaType.STRING, description: "ID da parcela" }
+        id: { type: SchemaType.STRING, description: "ID da parcela" },
+        a_partir_de_mes_ano: { type: SchemaType.STRING, description: "Mês a partir do qual deixa de ser cobrada caso seja recorrente (YYYY-MM). Se omitido, usa o mês atual." }
       },
       required: ["id"]
     }
@@ -314,11 +316,12 @@ export const aiTools: FunctionDeclaration[] = [
   },
   {
     name: "apagarEntrada",
-    description: "Remove permanentemente uma receita cadastrada.",
+    description: "Encerra/remove uma receita cadastrada a partir de determinado mês (mantendo o histórico dos meses anteriores se for recorrente).",
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
-        id: { type: SchemaType.STRING, description: "ID da receita" }
+        id: { type: SchemaType.STRING, description: "ID da receita" },
+        a_partir_de_mes_ano: { type: SchemaType.STRING, description: "Mês a partir do qual deixa de ser projetada (YYYY-MM). Se omitido, usa o mês atual." }
       },
       required: ["id"]
     }
@@ -351,11 +354,13 @@ export const aiTools: FunctionDeclaration[] = [
 
 // --- EXECUÇÃO DE FERRAMENTAS ---
 export async function executeAiTool(name: string, args: any) {
+  const now = new Date();
+  const defaultMesAno = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   try {
     switch (name) {
       case "adicionarGastoFixo": return await gastosFixosService.addGastoFixo(args.nome, args.valor_previsto, args.dia_pagamento_previsto || 10);
       case "editarGastoFixo": return await gastosFixosService.updateGastoFixo(args.id, args.nome, args.valor_previsto, args.dia_pagamento_previsto || 10);
-      case "apagarGastoFixo": await gastosFixosService.deleteGastoFixo(args.id); return { success: true };
+      case "apagarGastoFixo": await gastosFixosService.deleteGastoFixo(args.id, args.a_partir_de_mes_ano || defaultMesAno); return { success: true };
       case "pagarGastoFixo": return await gastosFixosService.upsertRegistro(args.id, args.mes_ano, args.valor_real);
       case "adicionarCategoriaDiaria": return await gastosDiariosService.addCategoria(args.nome, args.limite_mensal);
       case "editarCategoriaDiaria": return await gastosDiariosService.updateCategoria(args.id, args.nome, args.limite_mensal);
@@ -386,7 +391,7 @@ export async function executeAiTool(name: string, args: any) {
         args.recorrente ?? false
       ); return { success: true };
       case "cancelarAssinaturaCartao": await parcelasService.cancelarAssinatura(args.id, args.a_partir_de_mes_ano); return { success: true };
-      case "apagarParcela": await parcelasService.deleteParcela(args.id); return { success: true };
+      case "apagarParcela": await parcelasService.deleteParcela(args.id, args.a_partir_de_mes_ano || defaultMesAno); return { success: true };
       case "atualizarLimiteParcelas": await parcelasService.updateLimiteParcelas(args.novo_limite); return { success: true };
       case "consultarHistoricoDiario": {
         // Busca os últimos 12 meses de registros
@@ -413,7 +418,7 @@ export async function executeAiTool(name: string, args: any) {
         const { id, ...updates } = args;
         return await entradasService.updateEntrada(id, updates);
       }
-      case "apagarEntrada": await entradasService.deleteEntrada(args.id); return { success: true };
+      case "apagarEntrada": await entradasService.deleteEntrada(args.id, args.a_partir_de_mes_ano || defaultMesAno); return { success: true };
       case "receberEntrada": return await entradasService.upsertRegistroEntrada(args.id_entrada, args.mes_ano, args.valor_real);
       case "consultarEntradasMensais": return await entradasService.fetchEntradasMensais(args.mes_ano);
       default: throw new Error(`Ferramenta "${name}" não encontrada.`);
